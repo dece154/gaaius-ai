@@ -1,0 +1,116 @@
+{
+  "identity": {
+    "name": "GAAIUS AI",
+    "archetype": "The Architect of Intelligence",
+    "vibe": "Cyber-Mystic, Electric Void, High-Performance",
+    "core_philosophy": "Unified Intelligence. One Interface, Infinite Capability."
+  },
+  "typography": {
+    "primary_font": "Manrope",
+    "secondary_font": "Unbounded",
+    "mono_font": "JetBrains Mono",
+    "import_url": "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Manrope:wght@400;500;600&family=Unbounded:wght@400;600;800&display=swap",
+    "usage": {
+      "headings": "font-secondary tracking-tight font-bold uppercase",
+      "body": "font-primary text-base leading-relaxed",
+      "ui_labels": "font-mono text-xs tracking-wider uppercase opacity-70",
+      "code": "font-mono text-sm"
+    }
+  },
+  "colors": {
+    "palette_name": "Electric Void",
+    "base": {
+      "background": "240 10% 3.9%",
+      "foreground": "0 0% 98%",
+      "card": "240 10% 3.9%",
+      "card_foreground": "0 0% 98%",
+      "popover": "240 10% 3.9%",
+      "popover_foreground": "0 0% 98%",
+      "primary": "263 70% 50%",
+      "primary_foreground": "210 40% 98%",
+      "secondary": "240 4% 16%",
+      "secondary_foreground": "210 40% 98%",
+      "muted": "240 4% 16%",
+      "muted_foreground": "215 20% 65%",
+      "accent": "263 70% 50%",
+      "accent_foreground": "210 40% 98%",
+      "destructive": "0 62.8% 30.6%",
+      "destructive_foreground": "210 40% 98%",
+      "border": "240 4% 16%",
+      "input": "240 4% 16%",
+      "ring": "263 70% 50%"
+    },
+    "special_accents": {
+      "neon_cyan": "#06b6d4",
+      "acid_green": "#d9f99d",
+      "void_black": "#050505",
+      "glass_border": "rgba(255, 255, 255, 0.1)"
+    }
+  },
+  "visual_enhancers": {
+    "glassmorphism": "backdrop-blur-xl bg-black/40 border border-white/10 shadow-2xl",
+    "neon_glow": "shadow-[0_0_20px_rgba(124,58,237,0.3)]",
+    "tracing_beam": "relative overflow-hidden after:content-[''] after:absolute after:inset-0 after:border-2 after:border-transparent after:animate-border-trace",
+    "grain_overlay": "before:content-[''] before:absolute before:inset-0 before:bg-[url('https://grainy-gradients.vercel.app/noise.svg')] before:opacity-5 before:pointer-events-none"
+  },
+  "layout_strategy": {
+    "container": "max-w-[1600px] mx-auto px-4 md:px-8",
+    "grid_system": "grid grid-cols-1 md:grid-cols-12 gap-6",
+    "sidebar": "fixed left-0 top-0 h-full w-64 border-r border-white/10 bg-black/50 backdrop-blur-xl z-50 hidden md:block",
+    "chat_area": "md:pl-64 min-h-screen flex flex-col",
+    "bento_grid": "grid grid-cols-1 md:grid-cols-4 gap-4 auto-rows-[180px]"
+  },
+  "components": {
+    "buttons": {
+      "primary": "rounded-full bg-primary hover:bg-primary/90 text-white font-secondary tracking-wide shadow-[0_0_15px_rgba(124,58,237,0.5)] transition-all hover:scale-105",
+      "secondary": "rounded-full bg-secondary hover:bg-secondary/80 text-white font-secondary border border-white/5",
+      "ghost": "rounded-full hover:bg-white/5 text-muted-foreground hover:text-white"
+    },
+    "cards": {
+      "default": "rounded-2xl bg-card border border-white/10 hover:border-primary/50 transition-colors duration-300",
+      "glass": "rounded-2xl bg-black/40 backdrop-blur-md border border-white/10"
+    },
+    "inputs": {
+      "chat": "rounded-2xl bg-secondary/50 border-transparent focus:border-primary/50 focus:ring-1 focus:ring-primary/50 text-lg py-6 px-6 shadow-inner"
+    }
+  },
+  "motion": {
+    "page_transition": "initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.4, ease: 'easeOut' }}",
+    "hover_lift": "hover:-translate-y-1 transition-transform duration-300",
+    "stagger_children": "variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } }}"
+  },
+  "image_urls": {
+    "hero_background": {
+      "url": "https://images.unsplash.com/photo-1762279389042-9439bfb6c155?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "description": "Abstract neon lines forming a digital landscape - Use as subtle background overlay with low opacity",
+      "category": "background"
+    },
+    "empty_state_art": {
+      "url": "https://images.unsplash.com/photo-1762278804729-13d330fad71a?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "description": "Abstract streaks of purple and pink lights - Use for 'No chats yet' or welcome screen hero",
+      "category": "illustration"
+    },
+    "cyber_city": {
+      "url": "https://images.unsplash.com/photo-1535391879778-3bae11d29a24?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "description": "Guangzhou night skyline - Use for 'Video Generation' feature preview card",
+      "category": "feature_preview"
+    }
+  },
+  "instructions_to_main_agent": [
+    "1. INSTALL FONTS: Add the Google Fonts import to index.css immediately.",
+    "2. CONFIGURE TAILWIND: Update tailwind.config.js with the 'Electric Void' color palette and font families.",
+    "3. GLOBAL STYLES: Apply the 'grain_overlay' class to the body in index.css to give the entire app a cinematic texture.",
+    "4. LAYOUT: Build the 'MainLayout' component first, implementing the glassmorphic sidebar and the chat area container.",
+    "5. CHAT INTERFACE: The chat input should be floating at the bottom, detached from the edge, with a 'glass' effect.",
+    "6. MODEL SELECTOR: Create a prominent 'Model Mode' switcher (Chat / Image / Video) that changes the accent color based on the active mode (Purple for Chat, Cyan for Image, Orange for Video).",
+    "7. USE SONNER: Replace any default alerts with 'sonner' toasts for a premium feel.",
+    "8. DATA-TESTID: Ensure every interactive element has a data-testid attribute (e.g., 'chat-input', 'send-button', 'model-selector')."
+  ],
+  "universal_guidelines": [
+    "Avoid gradients for backgrounds; use solid deep colors or subtle noise textures.",
+    "Never use 'Inter' font. Use 'Manrope' for UI and 'Unbounded' for headings.",
+    "All containers with borders must have internal padding (p-6 or p-8).",
+    "Use 2-3x more spacing than typical designs (gap-8, py-12).",
+    "Dark mode is the ONLY mode. Do not implement light mode toggles."
+  ]
+}
