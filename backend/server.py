@@ -266,7 +266,10 @@ async def generate_image(request: ImageGenerationRequest):
         
     except Exception as e:
         logger.error(f"Image generation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = str(e)
+        if "402" in error_msg or "credit" in error_msg.lower() or "billing" in error_msg.lower():
+            raise HTTPException(status_code=402, detail="Image generation requires Replicate API credits. Please add credits to your Replicate account.")
+        raise HTTPException(status_code=500, detail=f"Image generation failed: {error_msg}")
 
 # ============== VIDEO GENERATION (REPLICATE) ==============
 
