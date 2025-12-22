@@ -384,23 +384,35 @@ class GAAIUSAPITester:
 
         # Core functionality tests
         self.test_health_check()
+        
+        # Authentication tests
+        print("\n🔐 Testing Authentication...")
+        self.test_user_registration()
+        self.test_user_login()
+        self.test_get_current_user()
+        
+        # Payment configuration
+        self.test_payment_config()
+        
+        # Session management
+        print("\n💬 Testing Session Management...")
         self.test_create_session()
         self.test_get_sessions()
         
         # Chat functionality
+        print("\n🤖 Testing Chat Functionality...")
         self.test_chat_functionality()
         time.sleep(2)  # Brief pause between tests
         self.test_chat_history()
         
         # Generation tests (these take longer)
-        print("\n🎨 Testing AI Generation Features (this will take time)...")
+        print("\n🎨 Testing AI Generation Features...")
         self.test_image_generation()
+        self.test_tts()
+        self.test_file_generation()
         
         # Skip video test for now as it takes too long for initial testing
         print("⏭️  Skipping video generation test (takes 2-5 minutes)")
-        
-        # Voice functionality
-        self.test_tts()
         
         # History and cleanup
         self.test_generations_history()
