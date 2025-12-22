@@ -31,6 +31,10 @@ class GAAIUSAPITester:
         """Run a single API test"""
         url = f"{self.api_url}/{endpoint}"
         headers = {'Content-Type': 'application/json'} if not files else {}
+        
+        # Add auth token if available
+        if self.token:
+            headers['Authorization'] = f'Bearer {self.token}'
 
         print(f"\n🔍 Testing {name}...")
         print(f"   URL: {url}")
@@ -40,7 +44,9 @@ class GAAIUSAPITester:
                 response = requests.get(url, headers=headers, timeout=timeout)
             elif method == 'POST':
                 if files:
-                    response = requests.post(url, files=files, timeout=timeout)
+                    # Remove Content-Type for file uploads
+                    headers.pop('Content-Type', None)
+                    response = requests.post(url, files=files, headers=headers, timeout=timeout)
                 else:
                     response = requests.post(url, json=data, headers=headers, timeout=timeout)
             elif method == 'DELETE':
