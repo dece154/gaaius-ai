@@ -27,6 +27,7 @@ db = client[os.environ['DB_NAME']]
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 REPLICATE_API_TOKEN = os.environ.get('REPLICATE_API_TOKEN')
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+HF_TOKEN = os.environ.get('HF_TOKEN')
 
 # Set replicate token in environment
 os.environ['REPLICATE_API_TOKEN'] = REPLICATE_API_TOKEN or ''
@@ -37,6 +38,10 @@ groq_client = Groq(api_key=GROQ_API_KEY)
 
 # Initialize Replicate
 import replicate
+
+# Initialize Hugging Face client
+from huggingface_hub import InferenceClient
+hf_client = InferenceClient(api_key=HF_TOKEN)
 
 # Create the main app
 app = FastAPI()
