@@ -87,10 +87,82 @@ class GAAIUSAPITester:
         if success:
             print(f"   Health Status: {response}")
             # Check if all required services are available
-            if response.get('groq') and response.get('replicate') and response.get('tts'):
+            if response.get('groq') and response.get('huggingface'):
                 print("   ✅ All AI services available")
             else:
                 print(f"   ⚠️  Some services unavailable: {response}")
+        return success
+
+    def test_user_registration(self):
+        """Test user registration"""
+        test_email = f"test_{int(time.time())}@example.com"
+        success, response = self.run_test(
+            "User Registration",
+            "POST",
+            "auth/register",
+            200,
+            data={
+                "email": test_email,
+                "password": "testpass123",
+                "name": "Test User"
+            }
+        )
+        if success and 'token' in response:
+            self.token = response['token']
+            self.user_id = response['user']['id']
+            print(f"   Registered user: {response['user']['email']}")
+            print(f"   User ID: {self.user_id}")
+        return success
+
+    def test_user_login(self):
+        """Test user login with existing credentials"""
+        # Try to login with a test account
+        success, response = self.run_test(
+            "User Login",
+            "POST",
+            "auth/login",
+            200,
+            data={
+                "email": "test@example.com",
+                "password": "testpass123"
+            }
+        )
+        if success and 'token' in response:
+            # Don't overwrite token from registration if we have one
+            if not self.token:
+                self.token = response['token']
+                self.user_id = response['user']['id']
+            print(f"   Logged in user: {response['user']['email']}")
+        return success
+
+    def test_get_current_user(self):
+        """Test getting current user with token"""
+        if not self.token:
+            print("❌ No token available for auth test")
+            return False
+            
+        success, response = self.run_test(
+            "Get Current User",
+            "GET",
+            "auth/me",
+            200
+        )
+        if success:
+            print(f"   Current user: {response.get('email', 'Unknown')}")
+            print(f"   Pro status: {response.get('is_pro', False)}")
+        return success
+
+    def test_payment_config(self):
+        """Test payment configuration endpoint"""
+        success, response = self.run_test(
+            "Payment Config",
+            "GET",
+            "payment/config",
+            200
+        )
+        if success:
+            print(f"   PayPal Client ID: {response.get('paypal_client_id', 'Not set')[:20]}...")
+            print(f"   Pro Price USD: ${response.get('pro_price_usd', 'Unknown')}")
         return success
 
     def test_create_session(self):
