@@ -444,24 +444,65 @@ async def get_chat_history(session_id: str):
 @api_router.post("/image/generate", response_model=ImageGenerationResponse)
 async def generate_image(request: ImageGenerationRequest, user = Depends(get_current_user)):
     try:
-        image = hf_client.text_to_image(request.prompt, model="black-forest-labs/FLUX.1-dev")
+        # Use direct HuggingFace Inference API with Stable Diffusion (truly free, no limits)
+        import requests as req
+        from PIL import Image as PILImage
         
+        # Try multiple free models
+        free_models = [
+            "stabilityai/stable-diffusion-2-1",
+            "runwayml/stable-diffusion-v1-5",
+            "CompVis/stable-diffusion-v1-4"
+        ]
+        
+        image_bytes = None
+        model_used = None
+        
+        for model in free_models:
+            try:
+                API_URL = f"https://api-inference.huggingface.co/models/{model}"
+                headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+                response = req.post(API_URL, headers=headers, json={"inputs": request.prompt}, timeout=120)
+                
+                if response.status_code == 200:
+                    image_bytes = response.content
+                    model_used = model.split("/")[-1]
+                    break
+                elif response.status_code == 503:
+                    # Model loading, wait and retry
+                    import time
+                    time.sleep(20)
+                    response = req.post(API_URL, headers=headers, json={"inputs": request.prompt}, timeout=120)
+                    if response.status_code == 200:
+                        image_bytes = response.content
+                        model_used = model.split("/")[-1]
+                        break
+            except Exception as e:
+                logger.warning(f"Model {model} failed: {e}")
+                continue
+        
+        if not image_bytes:
+            raise Exception("All image models failed. Please try again.")
+        
+        # Save image
         gen_id = str(uuid.uuid4())
         img_filename = f"{gen_id}.png"
         img_path = ROOT_DIR / "static" / img_filename
         (ROOT_DIR / "static").mkdir(exist_ok=True)
+        
+        # Convert bytes to image and save
+        image = PILImage.open(io.BytesIO(image_bytes))
         image.save(img_path, format='PNG')
         
         image_url = f"/api/static/{img_filename}"
-        model_used = "FLUX.1-dev (HuggingFace)"
         timestamp = datetime.now(timezone.utc).isoformat()
         
         await db.generations.insert_one({
             "id": gen_id, "type": "image", "prompt": request.prompt, "url": image_url,
-            "model_used": model_used, "session_id": request.session_id, "timestamp": timestamp
+            "model_used": f"{model_used} (Free)", "session_id": request.session_id, "timestamp": timestamp
         })
         
-        return ImageGenerationResponse(id=gen_id, prompt=request.prompt, image_url=image_url, model_used=model_used, timestamp=timestamp)
+        return ImageGenerationResponse(id=gen_id, prompt=request.prompt, image_url=image_url, model_used=f"{model_used} (Free)", timestamp=timestamp)
         
     except Exception as e:
         logger.error(f"Image generation error: {e}")
