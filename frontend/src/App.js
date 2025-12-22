@@ -137,27 +137,55 @@ const ImageResult = ({ data }) => {
 };
 
 // Video Result Component
-const VideoResult = ({ data }) => (
-  <div 
-    className="glass rounded-2xl overflow-hidden animate-in fade-in"
-    data-testid={`video-result-${data.id}`}
-  >
-    <video 
-      src={data.video_url} 
-      controls
-      className="w-full h-auto"
-    />
-    <div className="p-4">
-      <div className="flex items-center gap-2 mb-2">
-        <Video className="w-4 h-4 text-orange-400" />
-        <span className="font-mono text-xs text-orange-400 uppercase tracking-wider">
-          {data.model_used}
-        </span>
+const VideoResult = ({ data }) => {
+  // Handle both relative API paths and full URLs
+  const rawUrl = data.url || data.video_url || '';
+  const videoUrl = rawUrl 
+    ? (rawUrl.startsWith('/api') 
+        ? `${BACKEND_URL}${rawUrl}` 
+        : rawUrl)
+    : '';
+    
+  if (!videoUrl) return null;
+
+  return (
+    <div 
+      className="glass rounded-2xl overflow-hidden animate-in fade-in"
+      data-testid={`video-result-${data.id}`}
+    >
+      <video 
+        src={videoUrl} 
+        controls
+        className="w-full h-auto bg-black"
+        poster=""
+      />
+      <div className="p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Video className="w-4 h-4 text-orange-400" />
+          <span className="font-mono text-xs text-orange-400 uppercase tracking-wider">
+            {data.model_used}
+          </span>
+        </div>
+        <p className="text-sm text-muted-foreground line-clamp-2">{data.prompt}</p>
+        {data.metadata?.scenes && (
+          <div className="mt-2 text-xs text-muted-foreground">
+            {data.metadata.keyframe_count} keyframes • {data.metadata.duration}s
+          </div>
+        )}
+        <a 
+          href={videoUrl}
+          download
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-flex items-center gap-2 text-xs text-orange-400 hover:text-orange-300"
+        >
+          <Download className="w-3 h-3" />
+          Download
+        </a>
       </div>
-      <p className="text-sm text-muted-foreground line-clamp-2">{data.prompt}</p>
     </div>
-  </div>
-);
+  );
+};
 
 // Main App Component
 function App() {
@@ -170,6 +198,7 @@ function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [generations, setGenerations] = useState([]);
+  const [videoStyle, setVideoStyle] = useState("cinematic");
   
   const messagesEndRef = useRef(null);
   const mediaRecorderRef = useRef(null);
