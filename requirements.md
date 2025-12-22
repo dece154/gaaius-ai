@@ -1,75 +1,84 @@
 # GAAIUS AI - Requirements & Architecture
 
 ## Original Problem Statement
-Create AI that has same interface as Groq BUT it uses open source AI and it chooses the best AI for every task. Use Groq for chat, Replicate for image and video generation, OpenAI TTS and Whisper for voice. They must all act as one unified AI called GAAIUS AI.
+Create AI that has same interface as Groq BUT it uses open source AI and it chooses the best AI for every task. Use Groq for chat, HuggingFace for image/video/audio generation, free TTS and STT. All act as one unified AI called GAAIUS AI. Added user authentication, PayPal ($1 international) and PayFast (ZAR, South Africa) payment integration for Pro subscription, ad banners for free users, Projects page, Build/Vibe Coder page.
 
 ## Architecture
 
 ### Backend (FastAPI)
 - **Chat**: Groq API with Llama 3.3 70B Versatile
-- **Image Generation**: HuggingFace Inference API with FLUX.1-dev (FREE!)
-- **Video Generation**: GAAIUS AI Keyframe Engine (combines FLUX + Groq)
-  - Uses Groq to generate scene descriptions
-  - Uses FLUX to generate AI keyframes
-  - Stitches frames into video with smooth transitions
-- **Text-to-Speech**: OpenAI TTS via Emergent integrations
-- **Speech-to-Text**: OpenAI Whisper via Emergent integrations
-- **Database**: MongoDB for sessions, messages, and generations
+- **Image Generation**: HuggingFace FLUX.1-dev (FREE!)
+- **Video Generation**: GAAIUS AI Keyframe Engine (FLUX + Groq)
+- **Audio Generation**: HuggingFace MusicGen
+- **Text-to-Speech**: HuggingFace espnet/VITS, MMS-TTS (FREE!)
+- **Speech-to-Text**: HuggingFace Whisper (FREE!)
+- **File Generation**: Groq Llama 3.3 for code/docs/data
+- **Authentication**: JWT tokens with email/password
+- **Payments**: PayPal + PayFast integration
+- **Database**: MongoDB
 
 ### Video Engine Features
-- **Standard Video**: 5-second videos with 3+ AI-generated keyframes
-- **Advanced Video**: Custom duration (up to 30s), multiple styles
-- **Story Video**: Multi-chapter videos (up to 5 chapters, 15s each)
+- **Standard Video**: 5-30s with AI-generated keyframes
+- **Story Video**: Multi-chapter (up to 5 chapters)
 - **Styles**: cinematic, anime, realistic, artistic
 
 ### Frontend (React)
-- Modern glassmorphic "Electric Void" dark theme
-- Mode switcher (Chat/Image/Video)
-- Session management with sidebar
-- Voice input/output controls
-- Real-time chat with model indicators
-- Video player with download
+- **5 Modes**: Chat, Image, Video, Audio, Files
+- **Projects Page**: User project management
+- **Build Page**: Vibe Coder with split view (chat + preview)
+- **Authentication**: Sign in/up modals
+- **Pro Upgrade**: PayPal and PayFast payment modals
+- **Ad Banners**: For non-pro users
 
 ## API Endpoints
-- `GET /api/health` - Health check with model availability
-- `POST /api/sessions` - Create chat session
-- `GET /api/sessions` - List sessions
-- `DELETE /api/sessions/{id}` - Delete session
-- `POST /api/chat` - Send chat message
-- `GET /api/chat/{session_id}/history` - Get chat history
-- `POST /api/image/generate` - Generate image (HuggingFace FLUX)
-- `POST /api/video/generate` - Generate video (AI Keyframe Engine)
-- `POST /api/video/generate-advanced` - Advanced video with options
-- `POST /api/video/generate-story` - Multi-chapter story video
+### Auth
+- `POST /api/auth/register` - User registration
+- `POST /api/auth/login` - User login
+- `GET /api/auth/me` - Get current user
+
+### Payments
+- `GET /api/payment/config` - Get payment config
+- `POST /api/payment/paypal/create` - Create PayPal order
+- `POST /api/payment/paypal/capture/{order_id}` - Capture PayPal payment
+- `POST /api/payment/payfast/create` - Create PayFast payment
+- `POST /api/payment/payfast/notify` - PayFast webhook
+
+### Generation
+- `POST /api/chat` - Chat with AI
+- `POST /api/image/generate` - Generate image
+- `POST /api/video/generate` - Generate video
+- `POST /api/video/generate-story` - Generate story video
+- `POST /api/audio/generate` - Generate music/audio
 - `POST /api/tts` - Text-to-speech
 - `POST /api/stt` - Speech-to-text
-- `GET /api/generations` - List generated media
-- `GET /api/static/{filename}` - Serve generated images
-- `GET /api/static/videos/{filename}` - Serve generated videos
+- `POST /api/file/generate` - Generate code/docs
+
+### Projects
+- `POST /api/projects` - Create project
+- `GET /api/projects` - List projects
+- `GET /api/projects/{id}` - Get project
+
+### Build
+- `POST /api/build/generate` - Generate code for vibe coder
 
 ## Tasks Completed
-- [x] Backend with all AI integrations
-- [x] Chat functionality with Groq Llama 3.3 70B
-- [x] Image generation with HuggingFace FLUX.1-dev (FREE!)
-- [x] Video generation with AI Keyframe Engine (FREE!)
-- [x] TTS with OpenAI via Emergent
-- [x] STT with Whisper via Emergent
-- [x] Session management in MongoDB
-- [x] Modern glassmorphic UI
-- [x] Mode switching (Chat/Image/Video)
-- [x] Voice input/output controls
-- [x] Chat history persistence
-- [x] Image gallery with downloads
-- [x] Video gallery with downloads
-
-## Next Tasks
-- [ ] Add video style selector in UI
-- [ ] Add story video mode in UI
-- [ ] Implement video progress tracking
-- [ ] Add background music to videos
-- [ ] Add streaming chat responses
+- [x] All AI integrations (Groq, HuggingFace)
+- [x] 5 generation modes (Chat, Image, Video, Audio, Files)
+- [x] User authentication (JWT)
+- [x] PayPal payment integration
+- [x] PayFast payment integration (South Africa)
+- [x] Pro subscription with ad removal
+- [x] Projects page
+- [x] Build/Vibe Coder page with split view
+- [x] Mobile responsive design
+- [x] TTS with fallback models
+- [x] STT with Whisper
 
 ## API Keys Required
-- `GROQ_API_KEY` - For Llama 3.3 70B chat + video scene generation
-- `HF_TOKEN` - For HuggingFace FLUX image/video keyframe generation (FREE!)
-- `EMERGENT_LLM_KEY` - For OpenAI TTS/Whisper
+- `GROQ_API_KEY` - Groq Llama 3.3 70B
+- `HF_TOKEN` - HuggingFace (FREE!)
+- `PAYPAL_CLIENT_ID` - PayPal
+- `PAYPAL_SECRET` - PayPal
+- `PAYFAST_MERCHANT_ID` - PayFast
+- `PAYFAST_MERCHANT_KEY` - PayFast
+- `JWT_SECRET` - JWT authentication
