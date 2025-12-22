@@ -485,7 +485,7 @@ function App() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
-                  <span className="text-muted-foreground">Image: Flux Schnell</span>
+                  <span className="text-muted-foreground">Image: FLUX.1 (HF)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-orange-400"></span>
