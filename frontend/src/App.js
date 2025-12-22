@@ -339,11 +339,11 @@ function App() {
         toast.success("Image generated!");
 
       } else if (mode === "video") {
-        toast.info("Generating video... This may take a few minutes", { duration: 60000 });
+        toast.info("Generating AI video... Creating keyframes and compiling (2-5 mins)", { duration: 300000 });
         const res = await axios.post(`${API}/video/generate`, {
           prompt: userInput,
           session_id: currentSession?.id
-        });
+        }, { timeout: 600000 }); // 10 minute timeout for video
         setGenerations(prev => [res.data, ...prev]);
         toast.success("Video generated!");
       }
