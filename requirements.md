@@ -7,7 +7,7 @@ Create AI that has same interface as Groq BUT it uses open source AI and it choo
 
 ### Backend (FastAPI)
 - **Chat**: Groq API with Llama 3.3 70B Versatile
-- **Image Generation**: Replicate API with Flux Schnell
+- **Image Generation**: HuggingFace Inference API with FLUX.1-dev (FREE!)
 - **Video Generation**: Replicate API with MiniMax Video-01
 - **Text-to-Speech**: OpenAI TTS via Emergent integrations
 - **Speech-to-Text**: OpenAI Whisper via Emergent integrations
@@ -27,17 +27,18 @@ Create AI that has same interface as Groq BUT it uses open source AI and it choo
 - `DELETE /api/sessions/{id}` - Delete session
 - `POST /api/chat` - Send chat message
 - `GET /api/chat/{session_id}/history` - Get chat history
-- `POST /api/image/generate` - Generate image
+- `POST /api/image/generate` - Generate image (HuggingFace FLUX)
 - `POST /api/video/generate` - Generate video
 - `POST /api/tts` - Text-to-speech
 - `POST /api/stt` - Speech-to-text
 - `GET /api/generations` - List generated media
+- `GET /api/static/{filename}` - Serve generated images
 
 ## Tasks Completed
 - [x] Backend with all AI integrations
 - [x] Chat functionality with Groq Llama 3.3 70B
-- [x] Image generation endpoint (Flux Schnell)
-- [x] Video generation endpoint (MiniMax)
+- [x] Image generation with HuggingFace FLUX.1-dev (FREE!)
+- [x] Video generation endpoint (MiniMax) 
 - [x] TTS with OpenAI via Emergent
 - [x] STT with Whisper via Emergent
 - [x] Session management in MongoDB
@@ -45,18 +46,17 @@ Create AI that has same interface as Groq BUT it uses open source AI and it choo
 - [x] Mode switching (Chat/Image/Video)
 - [x] Voice input/output controls
 - [x] Chat history persistence
-- [x] User-friendly error messages
+- [x] Image gallery with downloads
 
 ## Next Tasks
-- [ ] Add credits to Replicate account to enable image/video generation
+- [ ] Add Replicate credits for video generation
 - [ ] Add more voice options selector
 - [ ] Implement chat session renaming
-- [ ] Add image/video generation history to chat context
 - [ ] Add streaming responses for chat
 - [ ] Add more image generation options (aspect ratio, quality)
-- [ ] Implement prompt templates/suggestions
 
 ## API Keys Required
 - `GROQ_API_KEY` - For Llama 3.3 70B chat
-- `REPLICATE_API_TOKEN` - For Flux/MiniMax generation
+- `HF_TOKEN` - For HuggingFace FLUX image generation (FREE tier available!)
+- `REPLICATE_API_TOKEN` - For MiniMax video generation
 - `EMERGENT_LLM_KEY` - For OpenAI TTS/Whisper
