@@ -172,11 +172,11 @@ Rules:
             try:
                 # Use Pollinations.ai - completely free, no API key needed
                 encoded_prompt = urllib.parse.quote(enhanced_prompt)
-                API_URL = f"https://pollinations.ai/p/{encoded_prompt}?width=1024&height=576&nologo=true"
+                API_URL = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=576&nologo=true"
                 
-                response = req.get(API_URL, timeout=120)
+                response = req.get(API_URL, timeout=120, allow_redirects=True)
                 
-                if response.status_code == 200:
+                if response.status_code == 200 and 'image' in response.headers.get('content-type', ''):
                     image = Image.open(io.BytesIO(response.content))
                     keyframes.append(image)
                 else:
