@@ -532,7 +532,7 @@ function App() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-orange-400"></span>
-                  <span className="text-muted-foreground">Video: MiniMax</span>
+                  <span className="text-muted-foreground">Video: AI Keyframe Engine</span>
                 </div>
               </div>
             </div>
