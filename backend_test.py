@@ -231,9 +231,9 @@ class GAAIUSAPITester:
         return success
 
     def test_image_generation(self):
-        """Test image generation with Replicate"""
+        """Test image generation with HuggingFace FLUX"""
         success, response = self.run_test(
-            "Image Generation",
+            "Image Generation (HuggingFace FLUX)",
             "POST",
             "image/generate",
             200,
@@ -247,6 +247,45 @@ class GAAIUSAPITester:
         if success:
             print(f"   Generated image: {response.get('image_url', '')[:50]}...")
             print(f"   Model Used: {response.get('model_used', 'Unknown')}")
+        return success
+
+    def test_tts(self):
+        """Test text-to-speech with HuggingFace MMS-TTS"""
+        success, response = self.run_test(
+            "Text-to-Speech (HuggingFace MMS-TTS)",
+            "POST",
+            "tts",
+            200,
+            data={
+                "text": "Hello, this is GAAIUS AI speaking.",
+                "voice": "en"
+            },
+            timeout=60
+        )
+        
+        if success:
+            print(f"   TTS Response: Audio file generated")
+        return success
+
+    def test_file_generation(self):
+        """Test file generation with Groq"""
+        success, response = self.run_test(
+            "File Generation (Groq)",
+            "POST",
+            "file/generate",
+            200,
+            data={
+                "prompt": "Create a simple Python hello world function",
+                "file_type": "code"
+            },
+            timeout=60
+        )
+        
+        if success:
+            print(f"   Generated file: {response.get('file_url', '')[:50]}...")
+            print(f"   Model Used: {response.get('model_used', 'Unknown')}")
+            if response.get('content'):
+                print(f"   Content preview: {response['content'][:100]}...")
         return success
 
     def test_video_generation(self):
