@@ -444,45 +444,20 @@ async def get_chat_history(session_id: str):
 @api_router.post("/image/generate", response_model=ImageGenerationResponse)
 async def generate_image(request: ImageGenerationRequest, user = Depends(get_current_user)):
     try:
-        # Use direct HuggingFace Inference API with Stable Diffusion (truly free, no limits)
         import requests as req
         from PIL import Image as PILImage
+        import urllib.parse
         
-        # Try multiple free models
-        free_models = [
-            "stabilityai/stable-diffusion-2-1",
-            "runwayml/stable-diffusion-v1-5",
-            "CompVis/stable-diffusion-v1-4"
-        ]
+        # Use Pollinations.ai - 100% FREE, no signup, no API key needed!
+        encoded_prompt = urllib.parse.quote(request.prompt)
+        API_URL = f"https://pollinations.ai/p/{encoded_prompt}?width=1024&height=1024&nologo=true"
         
-        image_bytes = None
-        model_used = None
+        response = req.get(API_URL, timeout=120)
         
-        for model in free_models:
-            try:
-                API_URL = f"https://api-inference.huggingface.co/models/{model}"
-                headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-                response = req.post(API_URL, headers=headers, json={"inputs": request.prompt}, timeout=120)
-                
-                if response.status_code == 200:
-                    image_bytes = response.content
-                    model_used = model.split("/")[-1]
-                    break
-                elif response.status_code == 503:
-                    # Model loading, wait and retry
-                    import time
-                    time.sleep(20)
-                    response = req.post(API_URL, headers=headers, json={"inputs": request.prompt}, timeout=120)
-                    if response.status_code == 200:
-                        image_bytes = response.content
-                        model_used = model.split("/")[-1]
-                        break
-            except Exception as e:
-                logger.warning(f"Model {model} failed: {e}")
-                continue
+        if response.status_code != 200:
+            raise Exception(f"Pollinations API error: {response.status_code}")
         
-        if not image_bytes:
-            raise Exception("All image models failed. Please try again.")
+        image_bytes = response.content
         
         # Save image
         gen_id = str(uuid.uuid4())
@@ -495,14 +470,15 @@ async def generate_image(request: ImageGenerationRequest, user = Depends(get_cur
         image.save(img_path, format='PNG')
         
         image_url = f"/api/static/{img_filename}"
+        model_used = "Pollinations AI (Free)"
         timestamp = datetime.now(timezone.utc).isoformat()
         
         await db.generations.insert_one({
             "id": gen_id, "type": "image", "prompt": request.prompt, "url": image_url,
-            "model_used": f"{model_used} (Free)", "session_id": request.session_id, "timestamp": timestamp
+            "model_used": model_used, "session_id": request.session_id, "timestamp": timestamp
         })
         
-        return ImageGenerationResponse(id=gen_id, prompt=request.prompt, image_url=image_url, model_used=f"{model_used} (Free)", timestamp=timestamp)
+        return ImageGenerationResponse(id=gen_id, prompt=request.prompt, image_url=image_url, model_used=model_used, timestamp=timestamp)
         
     except Exception as e:
         logger.error(f"Image generation error: {e}")
