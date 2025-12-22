@@ -90,37 +90,44 @@ const ChatMessage = ({ message, onSpeak }) => {
 };
 
 // Image Result Component
-const ImageResult = ({ data }) => (
-  <div 
-    className="glass rounded-2xl overflow-hidden animate-in fade-in"
-    data-testid={`image-result-${data.id}`}
-  >
-    <img 
-      src={data.image_url} 
-      alt={data.prompt}
-      className="w-full h-auto"
-    />
-    <div className="p-4">
-      <div className="flex items-center gap-2 mb-2">
-        <Sparkles className="w-4 h-4 text-cyan-400" />
-        <span className="font-mono text-xs text-cyan-400 uppercase tracking-wider">
-          {data.model_used}
-        </span>
+const ImageResult = ({ data }) => {
+  // Handle both relative API paths and full URLs
+  const imageUrl = data.image_url.startsWith('/api') 
+    ? `${BACKEND_URL}${data.image_url}` 
+    : data.image_url;
+    
+  return (
+    <div 
+      className="glass rounded-2xl overflow-hidden animate-in fade-in"
+      data-testid={`image-result-${data.id}`}
+    >
+      <img 
+        src={imageUrl} 
+        alt={data.prompt}
+        className="w-full h-auto"
+      />
+      <div className="p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Sparkles className="w-4 h-4 text-cyan-400" />
+          <span className="font-mono text-xs text-cyan-400 uppercase tracking-wider">
+            {data.model_used}
+          </span>
+        </div>
+        <p className="text-sm text-muted-foreground line-clamp-2">{data.prompt}</p>
+        <a 
+          href={imageUrl}
+          download
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-flex items-center gap-2 text-xs text-cyan-400 hover:text-cyan-300"
+        >
+          <Download className="w-3 h-3" />
+          Download
+        </a>
       </div>
-      <p className="text-sm text-muted-foreground line-clamp-2">{data.prompt}</p>
-      <a 
-        href={data.image_url}
-        download
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mt-3 inline-flex items-center gap-2 text-xs text-cyan-400 hover:text-cyan-300"
-      >
-        <Download className="w-3 h-3" />
-        Download
-      </a>
     </div>
-  </div>
-);
+  );
+};
 
 // Video Result Component
 const VideoResult = ({ data }) => (
