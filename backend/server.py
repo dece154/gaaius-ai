@@ -280,6 +280,17 @@ async def generate_image(request: ImageGenerationRequest):
             raise HTTPException(status_code=402, detail="Image generation requires API credits.")
         raise HTTPException(status_code=500, detail=f"Image generation failed: {error_msg}")
 
+# ============== STATIC FILES (GENERATED IMAGES) ==============
+
+from fastapi.responses import FileResponse
+
+@api_router.get("/static/{filename}")
+async def serve_static(filename: str):
+    file_path = ROOT_DIR / "static" / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(file_path, media_type="image/png")
+
 # ============== VIDEO GENERATION (REPLICATE) ==============
 
 @api_router.post("/video/generate", response_model=VideoGenerationResponse)
