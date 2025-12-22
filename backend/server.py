@@ -522,14 +522,33 @@ async def generate_story_video(request: dict, user = Depends(get_current_user)):
 async def text_to_speech(request: TTSRequest, user = Depends(get_current_user)):
     """Text-to-Speech using HuggingFace"""
     try:
-        # Use Facebook MMS-TTS (free)
-        audio = hf_client.text_to_speech(request.text, model="facebook/mms-tts-eng")
+        # Try multiple TTS models as fallback
+        models_to_try = [
+            "espnet/kan-bayashi_ljspeech_vits",
+            "facebook/mms-tts-eng",
+            "microsoft/speecht5_tts"
+        ]
+        
+        audio = None
+        last_error = None
+        
+        for model in models_to_try:
+            try:
+                audio = hf_client.text_to_speech(request.text, model=model)
+                if audio:
+                    break
+            except Exception as e:
+                last_error = e
+                continue
+        
+        if not audio:
+            raise last_error or Exception("TTS failed with all models")
         
         return StreamingResponse(io.BytesIO(audio), media_type="audio/wav", headers={"Content-Disposition": "attachment; filename=speech.wav"})
         
     except Exception as e:
         logger.error(f"TTS error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)}")
 
 @api_router.post("/stt")
 async def speech_to_text(audio: UploadFile = File(...), user = Depends(get_current_user)):
