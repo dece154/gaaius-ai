@@ -92,11 +92,15 @@ const ChatMessage = ({ message, onSpeak }) => {
 // Image Result Component
 const ImageResult = ({ data }) => {
   // Handle both relative API paths and full URLs
-  const imageUrl = data.image_url 
-    ? (data.image_url.startsWith('/api') 
-        ? `${BACKEND_URL}${data.image_url}` 
-        : data.image_url)
+  // API returns 'url' field for stored images, or 'image_url' from direct response
+  const rawUrl = data.url || data.image_url || '';
+  const imageUrl = rawUrl 
+    ? (rawUrl.startsWith('/api') 
+        ? `${BACKEND_URL}${rawUrl}` 
+        : rawUrl)
     : '';
+    
+  if (!imageUrl) return null;
     
   return (
     <div 
@@ -107,6 +111,7 @@ const ImageResult = ({ data }) => {
         src={imageUrl} 
         alt={data.prompt}
         className="w-full h-auto"
+        onError={(e) => { e.target.style.display = 'none'; }}
       />
       <div className="p-4">
         <div className="flex items-center gap-2 mb-2">
