@@ -230,23 +230,20 @@ async def get_chat_history(session_id: str):
 @api_router.post("/image/generate", response_model=ImageGenerationResponse)
 async def generate_image(request: ImageGenerationRequest):
     try:
-        # Use Flux Schnell for fast image generation
-        output = replicate.run(
-            "black-forest-labs/flux-schnell",
-            input={
-                "prompt": request.prompt,
-                "go_fast": True,
-                "num_outputs": 1,
-                "aspect_ratio": "1:1",
-                "output_format": "webp",
-                "output_quality": 80
-            }
+        # Use Hugging Face Inference API with FLUX model
+        image = hf_client.text_to_image(
+            request.prompt,
+            model="black-forest-labs/FLUX.1-dev"
         )
         
-        # Get the image URL
-        image_url = output[0] if isinstance(output, list) else str(output)
+        # Convert PIL image to base64 for storage/display
+        img_buffer = io.BytesIO()
+        image.save(img_buffer, format='PNG')
+        img_buffer.seek(0)
+        img_base64 = base64.b64encode(img_buffer.getvalue()).decode()
+        image_url = f"data:image/png;base64,{img_base64}"
         
-        model_used = "Flux Schnell"
+        model_used = "FLUX.1-dev (HuggingFace)"
         gen_id = str(uuid.uuid4())
         timestamp = datetime.now(timezone.utc).isoformat()
         
@@ -273,7 +270,7 @@ async def generate_image(request: ImageGenerationRequest):
         logger.error(f"Image generation error: {e}")
         error_msg = str(e)
         if "402" in error_msg or "credit" in error_msg.lower() or "billing" in error_msg.lower():
-            raise HTTPException(status_code=402, detail="Image generation requires Replicate API credits. Please add credits to your Replicate account.")
+            raise HTTPException(status_code=402, detail="Image generation requires API credits.")
         raise HTTPException(status_code=500, detail=f"Image generation failed: {error_msg}")
 
 # ============== VIDEO GENERATION (REPLICATE) ==============
