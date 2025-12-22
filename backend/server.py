@@ -1,18 +1,22 @@
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Depends, Request
+from fastapi.responses import StreamingResponse, FileResponse, HTMLResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional
+from pydantic import BaseModel, Field, ConfigDict, EmailStr
+from typing import List, Optional, Dict, Any
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import asyncio
 import base64
 import io
+import hashlib
+import jwt
+import requests
 
 # Load environment variables
 ROOT_DIR = Path(__file__).parent
@@ -25,19 +29,16 @@ db = client[os.environ['DB_NAME']]
 
 # API Keys
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
-REPLICATE_API_TOKEN = os.environ.get('REPLICATE_API_TOKEN')
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 HF_TOKEN = os.environ.get('HF_TOKEN')
-
-# Set replicate token in environment
-os.environ['REPLICATE_API_TOKEN'] = REPLICATE_API_TOKEN or ''
+PAYPAL_CLIENT_ID = os.environ.get('PAYPAL_CLIENT_ID')
+PAYPAL_SECRET = os.environ.get('PAYPAL_SECRET')
+PAYFAST_MERCHANT_ID = os.environ.get('PAYFAST_MERCHANT_ID')
+PAYFAST_MERCHANT_KEY = os.environ.get('PAYFAST_MERCHANT_KEY')
+JWT_SECRET = os.environ.get('JWT_SECRET', 'default_secret')
 
 # Initialize Groq client
 from groq import Groq
 groq_client = Groq(api_key=GROQ_API_KEY)
-
-# Initialize Replicate
-import replicate
 
 # Initialize Hugging Face client
 from huggingface_hub import InferenceClient
@@ -49,20 +50,38 @@ app = FastAPI()
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+# Security
+security = HTTPBearer(auto_error=False)
+
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # ============== MODELS ==============
+
+class UserRegister(BaseModel):
+    email: str
+    password: str
+    name: str = ""
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+class User(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    email: str
+    name: str = ""
+    password_hash: str
+    is_pro: bool = False
+    pro_expires: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 class ChatMessage(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     session_id: str
-    role: str  # user, assistant
+    role: str
     content: str
     model_used: Optional[str] = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -90,6 +109,8 @@ class ImageGenerationResponse(BaseModel):
 
 class VideoGenerationRequest(BaseModel):
     prompt: str
+    duration: int = 5
+    style: str = "cinematic"
     session_id: Optional[str] = None
 
 class VideoGenerationResponse(BaseModel):
@@ -101,16 +122,243 @@ class VideoGenerationResponse(BaseModel):
 
 class TTSRequest(BaseModel):
     text: str
-    voice: str = "alloy"
+    voice: str = "en"
+
+class AudioGenerationRequest(BaseModel):
+    prompt: str
+    duration: int = 10
+    type: str = "music"  # music, sfx, ambient
+
+class FileGenerationRequest(BaseModel):
+    prompt: str
+    file_type: str  # code, document, data, config
+
+class ProjectCreate(BaseModel):
+    name: str
+    description: str = ""
+    type: str = "web"  # web, api, data
 
 class Session(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str = "New Chat"
+    user_id: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-# ============== ROUTES ==============
+# ============== AUTH HELPERS ==============
+
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def create_token(user_id: str, email: str, is_pro: bool) -> str:
+    payload = {
+        "user_id": user_id,
+        "email": email,
+        "is_pro": is_pro,
+        "exp": datetime.now(timezone.utc) + timedelta(days=30)
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if not credentials:
+        return None
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=["HS256"])
+        user = await db.users.find_one({"id": payload["user_id"]}, {"_id": 0})
+        return user
+    except:
+        return None
+
+# ============== AUTH ROUTES ==============
+
+@api_router.post("/auth/register")
+async def register(data: UserRegister):
+    existing = await db.users.find_one({"email": data.email})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    user = User(
+        email=data.email,
+        name=data.name,
+        password_hash=hash_password(data.password)
+    )
+    await db.users.insert_one(user.model_dump())
+    token = create_token(user.id, user.email, user.is_pro)
+    
+    return {"token": token, "user": {"id": user.id, "email": user.email, "name": user.name, "is_pro": user.is_pro}}
+
+@api_router.post("/auth/login")
+async def login(data: UserLogin):
+    user = await db.users.find_one({"email": data.email}, {"_id": 0})
+    if not user or user["password_hash"] != hash_password(data.password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Check pro status
+    is_pro = user.get("is_pro", False)
+    if is_pro and user.get("pro_expires"):
+        if datetime.fromisoformat(user["pro_expires"]) < datetime.now(timezone.utc):
+            is_pro = False
+            await db.users.update_one({"id": user["id"]}, {"$set": {"is_pro": False}})
+    
+    token = create_token(user["id"], user["email"], is_pro)
+    return {"token": token, "user": {"id": user["id"], "email": user["email"], "name": user.get("name", ""), "is_pro": is_pro}}
+
+@api_router.get("/auth/me")
+async def get_me(user = Depends(get_current_user)):
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return {"id": user["id"], "email": user["email"], "name": user.get("name", ""), "is_pro": user.get("is_pro", False)}
+
+# ============== PAYMENT ROUTES ==============
+
+@api_router.post("/payment/paypal/create")
+async def create_paypal_order(user = Depends(get_current_user)):
+    """Create PayPal order for Pro subscription"""
+    try:
+        # Get PayPal access token
+        auth = base64.b64encode(f"{PAYPAL_CLIENT_ID}:{PAYPAL_SECRET}".encode()).decode()
+        token_response = requests.post(
+            "https://api-m.paypal.com/v1/oauth2/token",
+            headers={"Authorization": f"Basic {auth}", "Content-Type": "application/x-www-form-urlencoded"},
+            data="grant_type=client_credentials"
+        )
+        access_token = token_response.json().get("access_token")
+        
+        # Create order
+        order_response = requests.post(
+            "https://api-m.paypal.com/v2/checkout/orders",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "intent": "CAPTURE",
+                "purchase_units": [{
+                    "amount": {"currency_code": "USD", "value": "1.00"},
+                    "description": "GAAIUS AI Pro - 1 Month"
+                }]
+            }
+        )
+        return order_response.json()
+    except Exception as e:
+        logger.error(f"PayPal create error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/payment/paypal/capture/{order_id}")
+async def capture_paypal_order(order_id: str, user = Depends(get_current_user)):
+    """Capture PayPal payment and activate Pro"""
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        auth = base64.b64encode(f"{PAYPAL_CLIENT_ID}:{PAYPAL_SECRET}".encode()).decode()
+        token_response = requests.post(
+            "https://api-m.paypal.com/v1/oauth2/token",
+            headers={"Authorization": f"Basic {auth}", "Content-Type": "application/x-www-form-urlencoded"},
+            data="grant_type=client_credentials"
+        )
+        access_token = token_response.json().get("access_token")
+        
+        capture_response = requests.post(
+            f"https://api-m.paypal.com/v2/checkout/orders/{order_id}/capture",
+            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+        )
+        result = capture_response.json()
+        
+        if result.get("status") == "COMPLETED":
+            # Activate Pro for 30 days
+            expires = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+            await db.users.update_one(
+                {"id": user["id"]},
+                {"$set": {"is_pro": True, "pro_expires": expires}}
+            )
+            await db.payments.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": user["id"],
+                "provider": "paypal",
+                "order_id": order_id,
+                "amount": 1.00,
+                "currency": "USD",
+                "status": "completed",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+            return {"success": True, "message": "Pro activated!", "expires": expires}
+        
+        raise HTTPException(status_code=400, detail="Payment not completed")
+    except Exception as e:
+        logger.error(f"PayPal capture error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/payment/payfast/create")
+async def create_payfast_payment(user = Depends(get_current_user)):
+    """Generate PayFast payment URL"""
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    payment_id = str(uuid.uuid4())
+    
+    # PayFast payment data
+    data = {
+        "merchant_id": PAYFAST_MERCHANT_ID,
+        "merchant_key": PAYFAST_MERCHANT_KEY,
+        "return_url": f"https://multimodel-ai-hub-1.preview.emergentagent.com/?payment=success&id={payment_id}",
+        "cancel_url": "https://multimodel-ai-hub-1.preview.emergentagent.com/?payment=cancelled",
+        "notify_url": f"https://multimodel-ai-hub-1.preview.emergentagent.com/api/payment/payfast/notify",
+        "amount": "18.00",  # ~$1 in ZAR
+        "item_name": "GAAIUS AI Pro - 1 Month",
+        "custom_str1": user["id"],
+        "custom_str2": payment_id
+    }
+    
+    # Generate signature
+    param_string = "&".join([f"{k}={v}" for k, v in sorted(data.items()) if k != "signature"])
+    signature = hashlib.md5(param_string.encode()).hexdigest()
+    data["signature"] = signature
+    
+    # Store pending payment
+    await db.payments.insert_one({
+        "id": payment_id,
+        "user_id": user["id"],
+        "provider": "payfast",
+        "amount": 18.00,
+        "currency": "ZAR",
+        "status": "pending",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {"payment_url": "https://www.payfast.co.za/eng/process", "data": data}
+
+@api_router.post("/payment/payfast/notify")
+async def payfast_notify(request: Request):
+    """PayFast ITN callback"""
+    try:
+        form_data = await request.form()
+        data = dict(form_data)
+        
+        if data.get("payment_status") == "COMPLETE":
+            user_id = data.get("custom_str1")
+            payment_id = data.get("custom_str2")
+            
+            expires = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+            await db.users.update_one({"id": user_id}, {"$set": {"is_pro": True, "pro_expires": expires}})
+            await db.payments.update_one({"id": payment_id}, {"$set": {"status": "completed"}})
+        
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"PayFast notify error: {e}")
+        return {"status": "error"}
+
+@api_router.get("/payment/config")
+async def get_payment_config():
+    """Get payment configuration for frontend"""
+    return {
+        "paypal_client_id": PAYPAL_CLIENT_ID,
+        "payfast_merchant_id": PAYFAST_MERCHANT_ID,
+        "pro_price_usd": 1.00,
+        "pro_price_zar": 18.00
+    }
+
+# ============== BASIC ROUTES ==============
 
 @api_router.get("/")
 async def root():
@@ -118,19 +366,13 @@ async def root():
 
 @api_router.get("/health")
 async def health_check():
-    return {
-        "status": "healthy",
-        "groq": bool(GROQ_API_KEY),
-        "huggingface": bool(HF_TOKEN),
-        "replicate": bool(REPLICATE_API_TOKEN),
-        "tts": bool(EMERGENT_LLM_KEY)
-    }
+    return {"status": "healthy", "groq": bool(GROQ_API_KEY), "huggingface": bool(HF_TOKEN)}
 
 # ============== SESSION ROUTES ==============
 
 @api_router.post("/sessions", response_model=dict)
-async def create_session(name: str = "New Chat"):
-    session = Session(name=name)
+async def create_session(name: str = "New Chat", user = Depends(get_current_user)):
+    session = Session(name=name, user_id=user["id"] if user else None)
     doc = session.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
@@ -138,8 +380,9 @@ async def create_session(name: str = "New Chat"):
     return {"id": session.id, "name": session.name, "created_at": doc['created_at']}
 
 @api_router.get("/sessions")
-async def get_sessions():
-    sessions = await db.sessions.find({}, {"_id": 0}).sort("updated_at", -1).to_list(100)
+async def get_sessions(user = Depends(get_current_user)):
+    query = {"user_id": user["id"]} if user else {}
+    sessions = await db.sessions.find(query, {"_id": 0}).sort("updated_at", -1).to_list(100)
     return sessions
 
 @api_router.delete("/sessions/{session_id}")
@@ -148,28 +391,20 @@ async def delete_session(session_id: str):
     await db.messages.delete_many({"session_id": session_id})
     return {"status": "deleted"}
 
-# ============== CHAT ROUTES (GROQ) ==============
+# ============== CHAT ROUTES ==============
 
 @api_router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, user = Depends(get_current_user)):
     try:
-        # Get chat history for context
-        history = await db.messages.find(
-            {"session_id": request.session_id},
-            {"_id": 0}
-        ).sort("timestamp", 1).to_list(50)
+        history = await db.messages.find({"session_id": request.session_id}, {"_id": 0}).sort("timestamp", 1).to_list(50)
         
-        # Build messages for Groq
-        messages = [
-            {"role": "system", "content": "You are GAAIUS AI, a powerful unified AI assistant. You can help with text conversations, and your system also supports image generation, video generation, and voice capabilities. Be helpful, creative, and engaging."}
-        ]
+        messages = [{"role": "system", "content": "You are GAAIUS AI, a powerful unified AI assistant. You can help with text conversations, image generation, video creation, audio synthesis, and file generation. Be helpful, creative, and engaging."}]
         
         for msg in history:
             messages.append({"role": msg['role'], "content": msg['content']})
         
         messages.append({"role": "user", "content": request.message})
         
-        # Call Groq
         completion = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=messages,
@@ -180,39 +415,20 @@ async def chat(request: ChatRequest):
         response_content = completion.choices[0].message.content
         model_used = "Groq Llama 3.3 70B"
         
-        # Save user message
-        user_msg = ChatMessage(
-            session_id=request.session_id,
-            role="user",
-            content=request.message
-        )
+        # Save messages
+        user_msg = ChatMessage(session_id=request.session_id, role="user", content=request.message)
         user_doc = user_msg.model_dump()
         user_doc['timestamp'] = user_doc['timestamp'].isoformat()
         await db.messages.insert_one(user_doc)
         
-        # Save assistant message
-        assistant_msg = ChatMessage(
-            session_id=request.session_id,
-            role="assistant",
-            content=response_content,
-            model_used=model_used
-        )
+        assistant_msg = ChatMessage(session_id=request.session_id, role="assistant", content=response_content, model_used=model_used)
         assistant_doc = assistant_msg.model_dump()
         assistant_doc['timestamp'] = assistant_doc['timestamp'].isoformat()
         await db.messages.insert_one(assistant_doc)
         
-        # Update session
-        await db.sessions.update_one(
-            {"id": request.session_id},
-            {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
-        )
+        await db.sessions.update_one({"id": request.session_id}, {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}})
         
-        return ChatResponse(
-            id=assistant_msg.id,
-            content=response_content,
-            model_used=model_used,
-            timestamp=assistant_doc['timestamp']
-        )
+        return ChatResponse(id=assistant_msg.id, content=response_content, model_used=model_used, timestamp=assistant_doc['timestamp'])
         
     except Exception as e:
         logger.error(f"Chat error: {e}")
@@ -220,76 +436,292 @@ async def chat(request: ChatRequest):
 
 @api_router.get("/chat/{session_id}/history")
 async def get_chat_history(session_id: str):
-    messages = await db.messages.find(
-        {"session_id": session_id},
-        {"_id": 0}
-    ).sort("timestamp", 1).to_list(1000)
+    messages = await db.messages.find({"session_id": session_id}, {"_id": 0}).sort("timestamp", 1).to_list(1000)
     return messages
 
-# ============== IMAGE GENERATION (REPLICATE) ==============
+# ============== IMAGE GENERATION ==============
 
 @api_router.post("/image/generate", response_model=ImageGenerationResponse)
-async def generate_image(request: ImageGenerationRequest):
+async def generate_image(request: ImageGenerationRequest, user = Depends(get_current_user)):
     try:
-        # Use Hugging Face Inference API with FLUX model
-        image = hf_client.text_to_image(
-            request.prompt,
-            model="black-forest-labs/FLUX.1-dev"
-        )
+        image = hf_client.text_to_image(request.prompt, model="black-forest-labs/FLUX.1-dev")
         
-        # Save image to static folder and serve it
         gen_id = str(uuid.uuid4())
         img_filename = f"{gen_id}.png"
         img_path = ROOT_DIR / "static" / img_filename
-        
-        # Ensure static directory exists
         (ROOT_DIR / "static").mkdir(exist_ok=True)
-        
-        # Save image
         image.save(img_path, format='PNG')
         
-        # Create URL for the image
         image_url = f"/api/static/{img_filename}"
-        
         model_used = "FLUX.1-dev (HuggingFace)"
         timestamp = datetime.now(timezone.utc).isoformat()
         
-        # Save to database
         await db.generations.insert_one({
-            "id": gen_id,
-            "type": "image",
-            "prompt": request.prompt,
-            "url": image_url,
-            "model_used": model_used,
-            "session_id": request.session_id,
-            "timestamp": timestamp
+            "id": gen_id, "type": "image", "prompt": request.prompt, "url": image_url,
+            "model_used": model_used, "session_id": request.session_id, "timestamp": timestamp
         })
         
-        return ImageGenerationResponse(
-            id=gen_id,
-            prompt=request.prompt,
-            image_url=image_url,
-            model_used=model_used,
-            timestamp=timestamp
-        )
+        return ImageGenerationResponse(id=gen_id, prompt=request.prompt, image_url=image_url, model_used=model_used, timestamp=timestamp)
         
     except Exception as e:
         logger.error(f"Image generation error: {e}")
-        error_msg = str(e)
-        if "402" in error_msg or "credit" in error_msg.lower() or "billing" in error_msg.lower():
-            raise HTTPException(status_code=402, detail="Image generation requires API credits.")
-        raise HTTPException(status_code=500, detail=f"Image generation failed: {error_msg}")
+        raise HTTPException(status_code=500, detail=f"Image generation failed: {str(e)}")
 
-# ============== STATIC FILES (GENERATED IMAGES) ==============
+# ============== VIDEO GENERATION ==============
 
-from fastapi.responses import FileResponse
+from video_engine import VideoEngine, StoryVideoEngine
+
+video_engine = VideoEngine(hf_token=HF_TOKEN, groq_api_key=GROQ_API_KEY, output_dir=ROOT_DIR / "static" / "videos")
+story_video_engine = StoryVideoEngine(hf_token=HF_TOKEN, groq_api_key=GROQ_API_KEY, output_dir=ROOT_DIR / "static" / "videos")
+
+@api_router.post("/video/generate", response_model=VideoGenerationResponse)
+async def generate_video(request: VideoGenerationRequest, user = Depends(get_current_user)):
+    try:
+        result = await video_engine.generate_video(
+            prompt=request.prompt, duration=min(request.duration, 30), fps=8, style=request.style
+        )
+        
+        video_filename = Path(result["video_path"]).name
+        video_url = f"/api/static/videos/{video_filename}"
+        model_used = f"GAAIUS Video Engine ({request.style})"
+        gen_id = result["video_id"]
+        timestamp = datetime.now(timezone.utc).isoformat()
+        
+        await db.generations.insert_one({
+            "id": gen_id, "type": "video", "prompt": request.prompt, "url": video_url,
+            "model_used": model_used, "session_id": request.session_id, "timestamp": timestamp
+        })
+        
+        return VideoGenerationResponse(id=gen_id, prompt=request.prompt, video_url=video_url, model_used=model_used, timestamp=timestamp)
+        
+    except Exception as e:
+        logger.error(f"Video generation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Video generation failed: {str(e)}")
+
+@api_router.post("/video/generate-story")
+async def generate_story_video(request: dict, user = Depends(get_current_user)):
+    try:
+        result = await story_video_engine.generate_story_video(
+            story_prompt=request.get("prompt", ""),
+            chapters=min(request.get("chapters", 3), 5),
+            duration_per_chapter=min(request.get("duration_per_chapter", 8), 15),
+            style=request.get("style", "cinematic")
+        )
+        
+        video_filename = Path(result["video_path"]).name
+        video_url = f"/api/static/videos/{video_filename}"
+        
+        return {"id": result["video_id"], "video_url": video_url, "chapters": result.get("chapters", []), "total_duration": result.get("total_duration", 0)}
+    except Exception as e:
+        logger.error(f"Story video error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============== AUDIO GENERATION (HuggingFace TTS/STT) ==============
+
+@api_router.post("/tts")
+async def text_to_speech(request: TTSRequest, user = Depends(get_current_user)):
+    """Text-to-Speech using HuggingFace"""
+    try:
+        # Use Facebook MMS-TTS (free)
+        audio = hf_client.text_to_speech(request.text, model="facebook/mms-tts-eng")
+        
+        return StreamingResponse(io.BytesIO(audio), media_type="audio/wav", headers={"Content-Disposition": "attachment; filename=speech.wav"})
+        
+    except Exception as e:
+        logger.error(f"TTS error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/stt")
+async def speech_to_text(audio: UploadFile = File(...), user = Depends(get_current_user)):
+    """Speech-to-Text using HuggingFace Whisper"""
+    try:
+        audio_content = await audio.read()
+        
+        # Use Whisper via HuggingFace
+        result = hf_client.automatic_speech_recognition(audio_content, model="openai/whisper-large-v3")
+        
+        text = result.get("text", "") if isinstance(result, dict) else str(result)
+        return {"text": text, "model_used": "Whisper (HuggingFace)"}
+        
+    except Exception as e:
+        logger.error(f"STT error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/audio/generate")
+async def generate_audio(request: AudioGenerationRequest, user = Depends(get_current_user)):
+    """Generate music/sound effects using HuggingFace"""
+    try:
+        # Use MusicGen for music generation
+        audio = hf_client.text_to_audio(request.prompt, model="facebook/musicgen-small")
+        
+        gen_id = str(uuid.uuid4())
+        audio_filename = f"{gen_id}.wav"
+        audio_path = ROOT_DIR / "static" / "audio" / audio_filename
+        (ROOT_DIR / "static" / "audio").mkdir(parents=True, exist_ok=True)
+        
+        with open(audio_path, "wb") as f:
+            f.write(audio)
+        
+        audio_url = f"/api/static/audio/{audio_filename}"
+        timestamp = datetime.now(timezone.utc).isoformat()
+        
+        await db.generations.insert_one({
+            "id": gen_id, "type": "audio", "prompt": request.prompt, "url": audio_url,
+            "model_used": "MusicGen (HuggingFace)", "timestamp": timestamp
+        })
+        
+        return {"id": gen_id, "audio_url": audio_url, "model_used": "MusicGen (HuggingFace)", "timestamp": timestamp}
+        
+    except Exception as e:
+        logger.error(f"Audio generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============== FILE GENERATION ==============
+
+@api_router.post("/file/generate")
+async def generate_file(request: FileGenerationRequest, user = Depends(get_current_user)):
+    """Generate code/documents using Groq"""
+    try:
+        system_prompts = {
+            "code": "You are an expert programmer. Generate clean, well-documented code based on the user's request. Output only the code, no explanations.",
+            "document": "You are a professional writer. Generate well-structured documents based on the user's request.",
+            "data": "You are a data expert. Generate sample data in JSON, CSV, or other formats as requested.",
+            "config": "You are a DevOps expert. Generate configuration files (YAML, JSON, TOML, etc.) as requested."
+        }
+        
+        completion = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompts.get(request.file_type, system_prompts["code"])},
+                {"role": "user", "content": request.prompt}
+            ],
+            temperature=0.3,
+            max_tokens=4096
+        )
+        
+        content = completion.choices[0].message.content
+        gen_id = str(uuid.uuid4())
+        
+        # Determine file extension
+        extensions = {"code": "py", "document": "md", "data": "json", "config": "yaml"}
+        ext = extensions.get(request.file_type, "txt")
+        
+        file_filename = f"{gen_id}.{ext}"
+        file_path = ROOT_DIR / "static" / "files" / file_filename
+        (ROOT_DIR / "static" / "files").mkdir(parents=True, exist_ok=True)
+        
+        with open(file_path, "w") as f:
+            f.write(content)
+        
+        file_url = f"/api/static/files/{file_filename}"
+        timestamp = datetime.now(timezone.utc).isoformat()
+        
+        await db.generations.insert_one({
+            "id": gen_id, "type": "file", "prompt": request.prompt, "url": file_url,
+            "file_type": request.file_type, "model_used": "Groq Llama 3.3", "timestamp": timestamp
+        })
+        
+        return {"id": gen_id, "file_url": file_url, "content": content, "model_used": "Groq Llama 3.3", "timestamp": timestamp}
+        
+    except Exception as e:
+        logger.error(f"File generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============== PROJECTS ==============
+
+@api_router.post("/projects")
+async def create_project(data: ProjectCreate, user = Depends(get_current_user)):
+    if not user:
+        raise HTTPException(status_code=401, detail="Login required")
+    
+    project = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "name": data.name,
+        "description": data.description,
+        "type": data.type,
+        "files": [],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.projects.insert_one(project)
+    return project
+
+@api_router.get("/projects")
+async def get_projects(user = Depends(get_current_user)):
+    if not user:
+        return []
+    projects = await db.projects.find({"user_id": user["id"]}, {"_id": 0}).sort("updated_at", -1).to_list(100)
+    return projects
+
+@api_router.get("/projects/{project_id}")
+async def get_project(project_id: str, user = Depends(get_current_user)):
+    project = await db.projects.find_one({"id": project_id}, {"_id": 0})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+@api_router.put("/projects/{project_id}/files")
+async def update_project_files(project_id: str, files: dict, user = Depends(get_current_user)):
+    await db.projects.update_one(
+        {"id": project_id},
+        {"$set": {"files": files, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"status": "updated"}
+
+# ============== BUILD/VIBE CODING ==============
+
+@api_router.post("/build/generate")
+async def build_generate(data: dict, user = Depends(get_current_user)):
+    """Generate code for vibe coding builder"""
+    try:
+        prompt = data.get("prompt", "")
+        current_code = data.get("current_code", "")
+        
+        system_prompt = """You are an expert web developer helping build React applications.
+        Generate or modify code based on the user's request.
+        Always output valid React/JSX code that can be rendered.
+        Use Tailwind CSS for styling.
+        Output ONLY the code, no explanations or markdown."""
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+        ]
+        
+        if current_code:
+            messages.append({"role": "user", "content": f"Current code:\n```\n{current_code}\n```\n\nModify it to: {prompt}"})
+        else:
+            messages.append({"role": "user", "content": f"Create a React component: {prompt}"})
+        
+        completion = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=messages,
+            temperature=0.3,
+            max_tokens=4096
+        )
+        
+        code = completion.choices[0].message.content
+        # Clean up code blocks if present
+        if "```" in code:
+            import re
+            code_match = re.search(r'```(?:jsx?|tsx?|javascript|typescript)?\n?([\s\S]*?)```', code)
+            if code_match:
+                code = code_match.group(1)
+        
+        return {"code": code.strip(), "model_used": "Groq Llama 3.3"}
+        
+    except Exception as e:
+        logger.error(f"Build generate error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============== STATIC FILES ==============
 
 @api_router.get("/static/{filename}")
 async def serve_static(filename: str):
     file_path = ROOT_DIR / "static" / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(file_path, media_type="image/png")
+    return FileResponse(file_path)
 
 @api_router.get("/static/videos/{filename}")
 async def serve_video(filename: str):
@@ -298,239 +730,31 @@ async def serve_video(filename: str):
         raise HTTPException(status_code=404, detail="Video not found")
     return FileResponse(file_path, media_type="video/mp4")
 
-# ============== VIDEO GENERATION (AI KEYFRAME ENGINE) ==============
+@api_router.get("/static/audio/{filename}")
+async def serve_audio(filename: str):
+    file_path = ROOT_DIR / "static" / "audio" / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Audio not found")
+    return FileResponse(file_path, media_type="audio/wav")
 
-from video_engine import VideoEngine, StoryVideoEngine
+@api_router.get("/static/files/{filename}")
+async def serve_file(filename: str):
+    file_path = ROOT_DIR / "static" / "files" / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(file_path)
 
-# Initialize video engines
-video_engine = VideoEngine(
-    hf_token=HF_TOKEN,
-    groq_api_key=GROQ_API_KEY,
-    output_dir=ROOT_DIR / "static" / "videos"
-)
-
-story_video_engine = StoryVideoEngine(
-    hf_token=HF_TOKEN,
-    groq_api_key=GROQ_API_KEY,
-    output_dir=ROOT_DIR / "static" / "videos"
-)
-
-class VideoGenerationRequestV2(BaseModel):
-    prompt: str
-    duration: int = 5  # seconds
-    style: str = "cinematic"  # cinematic, anime, realistic, artistic
-    session_id: Optional[str] = None
-
-class StoryVideoRequest(BaseModel):
-    prompt: str
-    chapters: int = 3
-    duration_per_chapter: int = 8
-    style: str = "cinematic"
-    session_id: Optional[str] = None
-
-@api_router.post("/video/generate", response_model=VideoGenerationResponse)
-async def generate_video(request: VideoGenerationRequest):
-    """Generate a short video using AI keyframe generation."""
-    try:
-        # Use the new video engine
-        result = await video_engine.generate_video(
-            prompt=request.prompt,
-            duration=5,
-            fps=8,
-            style="cinematic"
-        )
-        
-        # Create URL for the video
-        video_filename = Path(result["video_path"]).name
-        video_url = f"/api/static/videos/{video_filename}"
-        
-        model_used = "GAAIUS Video Engine (FLUX + Groq)"
-        gen_id = result["video_id"]
-        timestamp = datetime.now(timezone.utc).isoformat()
-        
-        # Save to database
-        await db.generations.insert_one({
-            "id": gen_id,
-            "type": "video",
-            "prompt": request.prompt,
-            "url": video_url,
-            "model_used": model_used,
-            "session_id": request.session_id,
-            "metadata": {
-                "scenes": result.get("scenes", []),
-                "keyframe_count": result.get("keyframe_count", 0),
-                "duration": result.get("duration", 5)
-            },
-            "timestamp": timestamp
-        })
-        
-        return VideoGenerationResponse(
-            id=gen_id,
-            prompt=request.prompt,
-            video_url=video_url,
-            model_used=model_used,
-            timestamp=timestamp
-        )
-        
-    except Exception as e:
-        logger.error(f"Video generation error: {e}")
-        raise HTTPException(status_code=500, detail=f"Video generation failed: {str(e)}")
-
-@api_router.post("/video/generate-advanced")
-async def generate_advanced_video(request: VideoGenerationRequestV2):
-    """Generate a video with custom duration and style."""
-    try:
-        result = await video_engine.generate_video(
-            prompt=request.prompt,
-            duration=min(request.duration, 30),  # Max 30 seconds
-            fps=8,
-            style=request.style
-        )
-        
-        video_filename = Path(result["video_path"]).name
-        video_url = f"/api/static/videos/{video_filename}"
-        
-        model_used = f"GAAIUS Video Engine ({request.style})"
-        gen_id = result["video_id"]
-        timestamp = datetime.now(timezone.utc).isoformat()
-        
-        await db.generations.insert_one({
-            "id": gen_id,
-            "type": "video",
-            "prompt": request.prompt,
-            "url": video_url,
-            "model_used": model_used,
-            "session_id": request.session_id,
-            "metadata": result,
-            "timestamp": timestamp
-        })
-        
-        return {
-            "id": gen_id,
-            "video_url": video_url,
-            "model_used": model_used,
-            "scenes": result.get("scenes", []),
-            "duration": result.get("duration", request.duration),
-            "timestamp": timestamp
-        }
-        
-    except Exception as e:
-        logger.error(f"Advanced video generation error: {e}")
-        raise HTTPException(status_code=500, detail=f"Video generation failed: {str(e)}")
-
-@api_router.post("/video/generate-story")
-async def generate_story_video(request: StoryVideoRequest):
-    """Generate a longer story-based video with multiple chapters."""
-    try:
-        result = await story_video_engine.generate_story_video(
-            story_prompt=request.prompt,
-            chapters=min(request.chapters, 5),  # Max 5 chapters
-            duration_per_chapter=min(request.duration_per_chapter, 15),  # Max 15s per chapter
-            style=request.style
-        )
-        
-        video_filename = Path(result["video_path"]).name
-        video_url = f"/api/static/videos/{video_filename}"
-        
-        model_used = f"GAAIUS Story Engine ({request.chapters} chapters)"
-        gen_id = result["video_id"]
-        timestamp = datetime.now(timezone.utc).isoformat()
-        
-        await db.generations.insert_one({
-            "id": gen_id,
-            "type": "story_video",
-            "prompt": request.prompt,
-            "url": video_url,
-            "model_used": model_used,
-            "session_id": request.session_id,
-            "metadata": {
-                "chapters": result.get("chapters", []),
-                "total_duration": result.get("total_duration", 0),
-                "chapter_count": result.get("chapter_count", 0)
-            },
-            "timestamp": timestamp
-        })
-        
-        return {
-            "id": gen_id,
-            "video_url": video_url,
-            "model_used": model_used,
-            "chapters": result.get("chapters", []),
-            "total_duration": result.get("total_duration", 0),
-            "timestamp": timestamp
-        }
-        
-    except Exception as e:
-        logger.error(f"Story video generation error: {e}")
-        raise HTTPException(status_code=500, detail=f"Story video generation failed: {str(e)}")
-
-# ============== TEXT-TO-SPEECH (OpenAI via Emergent) ==============
-
-@api_router.post("/tts")
-async def text_to_speech(request: TTSRequest):
-    try:
-        from emergentintegrations.llm.openai import OpenAITextToSpeech
-        
-        tts = OpenAITextToSpeech(api_key=EMERGENT_LLM_KEY)
-        audio_bytes = await tts.generate_speech(
-            text=request.text,
-            model="tts-1",
-            voice=request.voice,
-            response_format="mp3"
-        )
-        
-        return StreamingResponse(
-            io.BytesIO(audio_bytes),
-            media_type="audio/mpeg",
-            headers={"Content-Disposition": "attachment; filename=speech.mp3"}
-        )
-        
-    except Exception as e:
-        logger.error(f"TTS error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ============== SPEECH-TO-TEXT (Whisper via Emergent) ==============
-
-@api_router.post("/stt")
-async def speech_to_text(audio: UploadFile = File(...)):
-    try:
-        from emergentintegrations.llm.openai import OpenAISpeechToText
-        
-        stt = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY)
-        
-        # Read the uploaded file
-        audio_content = await audio.read()
-        audio_file = io.BytesIO(audio_content)
-        audio_file.name = audio.filename or "audio.webm"
-        
-        response = await stt.transcribe(
-            file=audio_file,
-            model="whisper-1",
-            response_format="json"
-        )
-        
-        return {"text": response.text, "model_used": "Whisper"}
-        
-    except Exception as e:
-        logger.error(f"STT error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ============== GENERATION HISTORY ==============
+# ============== GENERATIONS ==============
 
 @api_router.get("/generations")
 async def get_generations(gen_type: Optional[str] = None, limit: int = 20):
     query = {}
     if gen_type:
         query["type"] = gen_type
-    
-    generations = await db.generations.find(
-        query,
-        {"_id": 0}
-    ).sort("timestamp", -1).to_list(limit)
-    
+    generations = await db.generations.find(query, {"_id": 0}).sort("timestamp", -1).to_list(limit)
     return generations
 
-# Include the router in the main app
+# Include router
 app.include_router(api_router)
 
 app.add_middleware(
