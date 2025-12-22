@@ -450,24 +450,24 @@ async def generate_image(request: ImageGenerationRequest, user = Depends(get_cur
         
         # Use Pollinations.ai - 100% FREE, no signup, no API key needed!
         encoded_prompt = urllib.parse.quote(request.prompt)
-        API_URL = f"https://pollinations.ai/p/{encoded_prompt}?width=1024&height=1024&nologo=true"
+        API_URL = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
         
-        response = req.get(API_URL, timeout=120)
+        response = req.get(API_URL, timeout=120, allow_redirects=True)
         
-        if response.status_code != 200:
+        if response.status_code != 200 or 'image' not in response.headers.get('content-type', ''):
             raise Exception(f"Pollinations API error: {response.status_code}")
         
         image_bytes = response.content
         
         # Save image
         gen_id = str(uuid.uuid4())
-        img_filename = f"{gen_id}.png"
+        img_filename = f"{gen_id}.jpg"
         img_path = ROOT_DIR / "static" / img_filename
         (ROOT_DIR / "static").mkdir(exist_ok=True)
         
         # Convert bytes to image and save
         image = PILImage.open(io.BytesIO(image_bytes))
-        image.save(img_path, format='PNG')
+        image.save(img_path, format='JPEG', quality=90)
         
         image_url = f"/api/static/{img_filename}"
         model_used = "Pollinations AI (Free)"
