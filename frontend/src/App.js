@@ -92,9 +92,11 @@ const ChatMessage = ({ message, onSpeak }) => {
 // Image Result Component
 const ImageResult = ({ data }) => {
   // Handle both relative API paths and full URLs
-  const imageUrl = data.image_url.startsWith('/api') 
-    ? `${BACKEND_URL}${data.image_url}` 
-    : data.image_url;
+  const imageUrl = data.image_url 
+    ? (data.image_url.startsWith('/api') 
+        ? `${BACKEND_URL}${data.image_url}` 
+        : data.image_url)
+    : '';
     
   return (
     <div 
