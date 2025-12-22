@@ -289,7 +289,7 @@ class GAAIUSAPITester:
         return success
 
     def test_video_generation(self):
-        """Test video generation with Replicate - This will take several minutes"""
+        """Test video generation - This will take several minutes"""
         print("⚠️  Video generation test will take 2-5 minutes...")
         success, response = self.run_test(
             "Video Generation",
@@ -298,6 +298,8 @@ class GAAIUSAPITester:
             200,
             data={
                 "prompt": "A simple animation of a bouncing ball",
+                "duration": 5,
+                "style": "cinematic",
                 "session_id": self.session_id
             },
             timeout=300  # Video generation takes much longer
@@ -309,21 +311,42 @@ class GAAIUSAPITester:
         return success
 
     def test_tts(self):
-        """Test text-to-speech"""
+        """Test text-to-speech with HuggingFace MMS-TTS"""
         success, response = self.run_test(
-            "Text-to-Speech",
+            "Text-to-Speech (HuggingFace MMS-TTS)",
             "POST",
             "tts",
             200,
             data={
                 "text": "Hello, this is GAAIUS AI speaking.",
-                "voice": "nova"
+                "voice": "en"
             },
             timeout=60
         )
         
         if success:
             print(f"   TTS Response: Audio file generated")
+        return success
+
+    def test_file_generation(self):
+        """Test file generation with Groq"""
+        success, response = self.run_test(
+            "File Generation (Groq)",
+            "POST",
+            "file/generate",
+            200,
+            data={
+                "prompt": "Create a simple Python hello world function",
+                "file_type": "code"
+            },
+            timeout=60
+        )
+        
+        if success:
+            print(f"   Generated file: {response.get('file_url', '')[:50]}...")
+            print(f"   Model Used: {response.get('model_used', 'Unknown')}")
+            if response.get('content'):
+                print(f"   Content preview: {response['content'][:100]}...")
         return success
 
     def test_generations_history(self):
