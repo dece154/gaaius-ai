@@ -659,7 +659,7 @@ function App() {
               
               <p className="text-center mt-3 font-mono text-xs text-muted-foreground">
                 {mode === "chat" ? "Powered by Groq Llama 3.3 70B" :
-                 mode === "image" ? "Powered by Flux Schnell via Replicate" :
+                 mode === "image" ? "Powered by FLUX.1-dev via HuggingFace" :
                  "Powered by MiniMax Video-01 via Replicate"}
               </p>
             </form>
