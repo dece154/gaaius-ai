@@ -237,15 +237,21 @@ async def generate_image(request: ImageGenerationRequest):
             model="black-forest-labs/FLUX.1-dev"
         )
         
-        # Convert PIL image to base64 for storage/display
-        img_buffer = io.BytesIO()
-        image.save(img_buffer, format='PNG')
-        img_buffer.seek(0)
-        img_base64 = base64.b64encode(img_buffer.getvalue()).decode()
-        image_url = f"data:image/png;base64,{img_base64}"
+        # Save image to static folder and serve it
+        gen_id = str(uuid.uuid4())
+        img_filename = f"{gen_id}.png"
+        img_path = ROOT_DIR / "static" / img_filename
+        
+        # Ensure static directory exists
+        (ROOT_DIR / "static").mkdir(exist_ok=True)
+        
+        # Save image
+        image.save(img_path, format='PNG')
+        
+        # Create URL for the image
+        image_url = f"/api/static/{img_filename}"
         
         model_used = "FLUX.1-dev (HuggingFace)"
-        gen_id = str(uuid.uuid4())
         timestamp = datetime.now(timezone.utc).isoformat()
         
         # Save to database
