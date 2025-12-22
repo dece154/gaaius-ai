@@ -291,6 +291,13 @@ async def serve_static(filename: str):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_path, media_type="image/png")
 
+@api_router.get("/static/videos/{filename}")
+async def serve_video(filename: str):
+    file_path = ROOT_DIR / "static" / "videos" / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Video not found")
+    return FileResponse(file_path, media_type="video/mp4")
+
 # ============== VIDEO GENERATION (AI KEYFRAME ENGINE) ==============
 
 from video_engine import VideoEngine, StoryVideoEngine
