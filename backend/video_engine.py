@@ -159,32 +159,50 @@ Rules:
         scenes: List[Dict[str, str]],
         style: str
     ) -> List[Image.Image]:
-        """Generate images for each scene using HuggingFace."""
+        """Generate images for each scene using HuggingFace free API."""
+        import requests as req
         
         keyframes = []
         
+        # Free models to try
+        free_models = [
+            "stabilityai/stable-diffusion-2-1",
+            "runwayml/stable-diffusion-v1-5",
+        ]
+        
         for scene in scenes:
             description = scene.get("description", "")
-            
-            # Add style enhancers
             enhanced_prompt = f"{description}, {style} style, high quality, detailed"
             
-            try:
-                # Generate image using FLUX
-                image = self.hf_client.text_to_image(
-                    enhanced_prompt,
-                    model="black-forest-labs/FLUX.1-dev"
-                )
+            image = None
+            for model in free_models:
+                try:
+                    API_URL = f"https://api-inference.huggingface.co/models/{model}"
+                    headers = {"Authorization": f"Bearer {os.environ.get('HF_TOKEN', '')}"}
+                    response = req.post(API_URL, headers=headers, json={"inputs": enhanced_prompt}, timeout=120)
+                    
+                    if response.status_code == 200:
+                        image = Image.open(io.BytesIO(response.content))
+                        break
+                    elif response.status_code == 503:
+                        import time
+                        time.sleep(20)
+                        response = req.post(API_URL, headers=headers, json={"inputs": enhanced_prompt}, timeout=120)
+                        if response.status_code == 200:
+                            image = Image.open(io.BytesIO(response.content))
+                            break
+                except Exception as e:
+                    print(f"Model {model} failed: {e}")
+                    continue
+            
+            if image:
                 keyframes.append(image)
-                
-            except Exception as e:
-                print(f"Keyframe generation error: {e}")
-                # Create a placeholder frame
-                placeholder = Image.new('RGB', (1024, 1024), color=(30, 30, 40))
+            else:
+                # Create placeholder if all models fail
+                placeholder = Image.new('RGB', (512, 512), color=(30, 30, 40))
                 keyframes.append(placeholder)
                 
-            # Small delay to avoid rate limiting
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(1)
             
         return keyframes
     
