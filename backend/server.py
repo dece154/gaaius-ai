@@ -121,6 +121,7 @@ async def health_check():
     return {
         "status": "healthy",
         "groq": bool(GROQ_API_KEY),
+        "huggingface": bool(HF_TOKEN),
         "replicate": bool(REPLICATE_API_TOKEN),
         "tts": bool(EMERGENT_LLM_KEY)
     }
