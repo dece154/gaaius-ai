@@ -9,6 +9,8 @@ class GAAIUSAPITester:
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.session_id = None
+        self.token = None
+        self.user_id = None
         self.tests_run = 0
         self.tests_passed = 0
         self.failed_tests = []
