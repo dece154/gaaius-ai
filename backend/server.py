@@ -291,24 +291,54 @@ async def serve_static(filename: str):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_path, media_type="image/png")
 
-# ============== VIDEO GENERATION (REPLICATE) ==============
+# ============== VIDEO GENERATION (AI KEYFRAME ENGINE) ==============
+
+from video_engine import VideoEngine, StoryVideoEngine
+
+# Initialize video engines
+video_engine = VideoEngine(
+    hf_token=HF_TOKEN,
+    groq_api_key=GROQ_API_KEY,
+    output_dir=ROOT_DIR / "static" / "videos"
+)
+
+story_video_engine = StoryVideoEngine(
+    hf_token=HF_TOKEN,
+    groq_api_key=GROQ_API_KEY,
+    output_dir=ROOT_DIR / "static" / "videos"
+)
+
+class VideoGenerationRequestV2(BaseModel):
+    prompt: str
+    duration: int = 5  # seconds
+    style: str = "cinematic"  # cinematic, anime, realistic, artistic
+    session_id: Optional[str] = None
+
+class StoryVideoRequest(BaseModel):
+    prompt: str
+    chapters: int = 3
+    duration_per_chapter: int = 8
+    style: str = "cinematic"
+    session_id: Optional[str] = None
 
 @api_router.post("/video/generate", response_model=VideoGenerationResponse)
 async def generate_video(request: VideoGenerationRequest):
+    """Generate a short video using AI keyframe generation."""
     try:
-        # Use MiniMax video-01 for video generation
-        output = replicate.run(
-            "minimax/video-01",
-            input={
-                "prompt": request.prompt,
-                "prompt_optimizer": True
-            }
+        # Use the new video engine
+        result = await video_engine.generate_video(
+            prompt=request.prompt,
+            duration=5,
+            fps=8,
+            style="cinematic"
         )
         
-        video_url = str(output) if output else ""
+        # Create URL for the video
+        video_filename = Path(result["video_path"]).name
+        video_url = f"/api/static/videos/{video_filename}"
         
-        model_used = "MiniMax Video-01"
-        gen_id = str(uuid.uuid4())
+        model_used = "GAAIUS Video Engine (FLUX + Groq)"
+        gen_id = result["video_id"]
         timestamp = datetime.now(timezone.utc).isoformat()
         
         # Save to database
@@ -319,6 +349,11 @@ async def generate_video(request: VideoGenerationRequest):
             "url": video_url,
             "model_used": model_used,
             "session_id": request.session_id,
+            "metadata": {
+                "scenes": result.get("scenes", []),
+                "keyframe_count": result.get("keyframe_count", 0),
+                "duration": result.get("duration", 5)
+            },
             "timestamp": timestamp
         })
         
@@ -332,10 +367,95 @@ async def generate_video(request: VideoGenerationRequest):
         
     except Exception as e:
         logger.error(f"Video generation error: {e}")
-        error_msg = str(e)
-        if "402" in error_msg or "credit" in error_msg.lower() or "billing" in error_msg.lower():
-            raise HTTPException(status_code=402, detail="Video generation requires Replicate API credits. Please add credits to your Replicate account.")
-        raise HTTPException(status_code=500, detail=f"Video generation failed: {error_msg}")
+        raise HTTPException(status_code=500, detail=f"Video generation failed: {str(e)}")
+
+@api_router.post("/video/generate-advanced")
+async def generate_advanced_video(request: VideoGenerationRequestV2):
+    """Generate a video with custom duration and style."""
+    try:
+        result = await video_engine.generate_video(
+            prompt=request.prompt,
+            duration=min(request.duration, 30),  # Max 30 seconds
+            fps=8,
+            style=request.style
+        )
+        
+        video_filename = Path(result["video_path"]).name
+        video_url = f"/api/static/videos/{video_filename}"
+        
+        model_used = f"GAAIUS Video Engine ({request.style})"
+        gen_id = result["video_id"]
+        timestamp = datetime.now(timezone.utc).isoformat()
+        
+        await db.generations.insert_one({
+            "id": gen_id,
+            "type": "video",
+            "prompt": request.prompt,
+            "url": video_url,
+            "model_used": model_used,
+            "session_id": request.session_id,
+            "metadata": result,
+            "timestamp": timestamp
+        })
+        
+        return {
+            "id": gen_id,
+            "video_url": video_url,
+            "model_used": model_used,
+            "scenes": result.get("scenes", []),
+            "duration": result.get("duration", request.duration),
+            "timestamp": timestamp
+        }
+        
+    except Exception as e:
+        logger.error(f"Advanced video generation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Video generation failed: {str(e)}")
+
+@api_router.post("/video/generate-story")
+async def generate_story_video(request: StoryVideoRequest):
+    """Generate a longer story-based video with multiple chapters."""
+    try:
+        result = await story_video_engine.generate_story_video(
+            story_prompt=request.prompt,
+            chapters=min(request.chapters, 5),  # Max 5 chapters
+            duration_per_chapter=min(request.duration_per_chapter, 15),  # Max 15s per chapter
+            style=request.style
+        )
+        
+        video_filename = Path(result["video_path"]).name
+        video_url = f"/api/static/videos/{video_filename}"
+        
+        model_used = f"GAAIUS Story Engine ({request.chapters} chapters)"
+        gen_id = result["video_id"]
+        timestamp = datetime.now(timezone.utc).isoformat()
+        
+        await db.generations.insert_one({
+            "id": gen_id,
+            "type": "story_video",
+            "prompt": request.prompt,
+            "url": video_url,
+            "model_used": model_used,
+            "session_id": request.session_id,
+            "metadata": {
+                "chapters": result.get("chapters", []),
+                "total_duration": result.get("total_duration", 0),
+                "chapter_count": result.get("chapter_count", 0)
+            },
+            "timestamp": timestamp
+        })
+        
+        return {
+            "id": gen_id,
+            "video_url": video_url,
+            "model_used": model_used,
+            "chapters": result.get("chapters", []),
+            "total_duration": result.get("total_duration", 0),
+            "timestamp": timestamp
+        }
+        
+    except Exception as e:
+        logger.error(f"Story video generation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Story video generation failed: {str(e)}")
 
 # ============== TEXT-TO-SPEECH (OpenAI via Emergent) ==============
 
