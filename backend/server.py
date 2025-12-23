@@ -379,6 +379,15 @@ async def create_session(name: str = "New Chat", user = Depends(get_current_user
     await db.sessions.insert_one(doc)
     return {"id": session.id, "name": session.name, "created_at": doc['created_at']}
 
+@api_router.put("/sessions/{session_id}")
+async def update_session(session_id: str, data: dict):
+    """Update session name"""
+    update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if "name" in data:
+        update_data["name"] = data["name"]
+    await db.sessions.update_one({"id": session_id}, {"$set": update_data})
+    return {"status": "updated"}
+
 @api_router.get("/sessions")
 async def get_sessions(user = Depends(get_current_user)):
     query = {"user_id": user["id"]} if user else {}
