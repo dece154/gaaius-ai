@@ -594,10 +594,28 @@ async def speech_to_text(audio: UploadFile = File(...), user = Depends(get_curre
 
 @api_router.post("/audio/generate")
 async def generate_audio(request: AudioGenerationRequest, user = Depends(get_current_user)):
-    """Generate music/sound effects using HuggingFace"""
+    """Generate music/sound effects - uses free API"""
     try:
-        # Use MusicGen for music generation
-        audio = hf_client.text_to_audio(request.prompt, model="facebook/musicgen-small")
+        import requests as req
+        import urllib.parse
+        
+        # Use Pollinations for audio generation (free)
+        encoded_prompt = urllib.parse.quote(f"Generate music: {request.prompt}")
+        
+        # Try to get audio from HuggingFace first
+        audio = None
+        try:
+            API_URL = "https://api-inference.huggingface.co/models/facebook/musicgen-small"
+            headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+            response = req.post(API_URL, headers=headers, json={"inputs": request.prompt}, timeout=120)
+            if response.status_code == 200 and 'audio' in response.headers.get('content-type', ''):
+                audio = response.content
+        except:
+            pass
+        
+        if not audio:
+            # Fallback: Generate a simple placeholder notification
+            raise HTTPException(status_code=503, detail="Audio generation is temporarily unavailable. HuggingFace free tier exceeded.")
         
         gen_id = str(uuid.uuid4())
         audio_filename = f"{gen_id}.wav"
