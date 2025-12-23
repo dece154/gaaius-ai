@@ -537,45 +537,6 @@ const MainApp = () => {
   useEffect(() => { if (currentSession) fetchMessages(currentSession.id); }, [currentSession]);
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  // Check for projects/build routes
-  if (location.pathname === "/projects") {
-    return (
-      <>
-        <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
-        <ProfileModal open={showProfile} onClose={() => setShowProfile(false)} />
-        <div className="h-screen flex bg-[#050505] overflow-hidden">
-          <Toaster position="top-center" theme="dark" />
-          <Sidebar 
-            mode={mode} setMode={setMode} sessions={sessions} currentSession={currentSession}
-            setCurrentSession={setCurrentSession} setSidebarOpen={setSidebarOpen} sidebarOpen={sidebarOpen}
-            createSession={createSession} deleteSession={deleteSession} navigate={navigate}
-            user={user} showAuth={() => setShowAuth(true)} showPro={() => setShowPro(true)} 
-            showProfile={() => setShowProfile(true)} logout={logout}
-          />
-          {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />}
-          <main className="flex-1 flex flex-col min-w-0">
-            <header className="h-16 border-b border-white/10 flex items-center justify-between px-4 md:px-6 glass">
-              <div className="flex items-center gap-4">
-                <button className="md:hidden p-2 hover:bg-white/5 rounded-lg" onClick={() => setSidebarOpen(true)}><Menu className="w-5 h-5" /></button>
-                <span className="font-secondary text-sm font-semibold">Projects</span>
-              </div>
-            </header>
-            <div className="flex-1 overflow-auto"><ProjectsPage /></div>
-          </main>
-        </div>
-      </>
-    );
-  }
-
-  if (location.pathname === "/build") {
-    return (
-      <div className="h-screen bg-[#050505]">
-        <Toaster position="top-center" theme="dark" />
-        <BuildPage />
-      </div>
-    );
-  }
-
   const fetchSessions = async () => {
     try {
       const res = await api.get("/sessions");
@@ -623,6 +584,45 @@ const MainApp = () => {
       toast.error("Failed to delete session");
     }
   };
+
+  // Check for projects/build routes
+  if (location.pathname === "/projects") {
+    return (
+      <>
+        <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
+        <ProfileModal open={showProfile} onClose={() => setShowProfile(false)} />
+        <div className="h-screen flex bg-[#050505] overflow-hidden">
+          <Toaster position="top-center" theme="dark" />
+          <Sidebar 
+            mode={mode} setMode={setMode} sessions={sessions} currentSession={currentSession}
+            setCurrentSession={setCurrentSession} setSidebarOpen={setSidebarOpen} sidebarOpen={sidebarOpen}
+            createSession={createSession} deleteSession={deleteSession} navigate={navigate}
+            user={user} showAuth={() => setShowAuth(true)} showPro={() => setShowPro(true)} 
+            showProfile={() => setShowProfile(true)} logout={logout}
+          />
+          {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />}
+          <main className="flex-1 flex flex-col min-w-0">
+            <header className="h-16 border-b border-white/10 flex items-center justify-between px-4 md:px-6 glass">
+              <div className="flex items-center gap-4">
+                <button className="md:hidden p-2 hover:bg-white/5 rounded-lg" onClick={() => setSidebarOpen(true)}><Menu className="w-5 h-5" /></button>
+                <span className="font-secondary text-sm font-semibold">Projects</span>
+              </div>
+            </header>
+            <div className="flex-1 overflow-auto"><ProjectsPage /></div>
+          </main>
+        </div>
+      </>
+    );
+  }
+
+  if (location.pathname === "/build") {
+    return (
+      <div className="h-screen bg-[#050505]">
+        <Toaster position="top-center" theme="dark" />
+        <BuildPage />
+      </div>
+    );
+  }
 
   // Auto-name session based on first message
   const autoNameSession = async (sessionId, message) => {
