@@ -646,11 +646,64 @@ async def generate_file(request: FileGenerationRequest, user = Depends(get_curre
     """Generate code/documents using Groq"""
     try:
         system_prompts = {
-            "code": "You are an expert programmer. Generate clean, well-documented code based on the user's request. Output only the code, no explanations.",
-            "document": "You are a professional writer. Generate well-structured documents based on the user's request.",
-            "data": "You are a data expert. Generate sample data in JSON, CSV, or other formats as requested.",
-            "config": "You are a DevOps expert. Generate configuration files (YAML, JSON, TOML, etc.) as requested."
+            "code": "You are an expert programmer. Generate clean, well-documented code based on the user's request. Output only the code, no explanations. Support Python, JavaScript, HTML, CSS, and other languages as requested.",
+            "document": "You are a professional document writer. Generate well-structured documents in the requested format. If user wants HTML, output HTML. If user wants plain text, output plain text. For documents, use proper formatting with headers and sections.",
+            "data": "You are a data expert. Generate sample data in the exact format requested - JSON, CSV, XML, or other formats. Output only the data, no explanations.",
+            "config": "You are a DevOps expert. Generate configuration files in the requested format (YAML, JSON, TOML, INI, .env, etc.) as requested. Output only the config, no explanations."
         }
+        
+        # Detect file type from prompt
+        prompt_lower = request.prompt.lower()
+        ext = "txt"
+        
+        if request.file_type == "code":
+            if "python" in prompt_lower or ".py" in prompt_lower:
+                ext = "py"
+            elif "javascript" in prompt_lower or ".js" in prompt_lower:
+                ext = "js"
+            elif "typescript" in prompt_lower or ".ts" in prompt_lower:
+                ext = "ts"
+            elif "html" in prompt_lower:
+                ext = "html"
+            elif "css" in prompt_lower:
+                ext = "css"
+            elif "java" in prompt_lower and "javascript" not in prompt_lower:
+                ext = "java"
+            elif "c++" in prompt_lower or "cpp" in prompt_lower:
+                ext = "cpp"
+            elif "rust" in prompt_lower:
+                ext = "rs"
+            elif "go" in prompt_lower:
+                ext = "go"
+            else:
+                ext = "py"
+        elif request.file_type == "document":
+            if "html" in prompt_lower:
+                ext = "html"
+            elif "txt" in prompt_lower or "text" in prompt_lower:
+                ext = "txt"
+            else:
+                ext = "md"
+        elif request.file_type == "data":
+            if "csv" in prompt_lower:
+                ext = "csv"
+            elif "xml" in prompt_lower:
+                ext = "xml"
+            elif "sql" in prompt_lower:
+                ext = "sql"
+            else:
+                ext = "json"
+        elif request.file_type == "config":
+            if "yaml" in prompt_lower or "yml" in prompt_lower:
+                ext = "yaml"
+            elif "toml" in prompt_lower:
+                ext = "toml"
+            elif "ini" in prompt_lower:
+                ext = "ini"
+            elif "env" in prompt_lower:
+                ext = "env"
+            else:
+                ext = "json"
         
         completion = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -663,12 +716,15 @@ async def generate_file(request: FileGenerationRequest, user = Depends(get_curre
         )
         
         content = completion.choices[0].message.content
+        
+        # Clean up code blocks if present
+        if "```" in content:
+            import re
+            code_match = re.search(r'```[\w]*\n?([\s\S]*?)```', content)
+            if code_match:
+                content = code_match.group(1).strip()
+        
         gen_id = str(uuid.uuid4())
-        
-        # Determine file extension
-        extensions = {"code": "py", "document": "md", "data": "json", "config": "yaml"}
-        ext = extensions.get(request.file_type, "txt")
-        
         file_filename = f"{gen_id}.{ext}"
         file_path = ROOT_DIR / "static" / "files" / file_filename
         (ROOT_DIR / "static" / "files").mkdir(parents=True, exist_ok=True)
