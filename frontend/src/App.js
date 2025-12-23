@@ -504,22 +504,30 @@ const MainApp = () => {
       } else if (mode === "image") {
         toast.info("Generating image...", { duration: 60000 });
         const res = await api.post("/image/generate", { prompt: userInput, session_id: currentSession?.id });
-        setGenerations(prev => [res.data, ...prev]);
+        // Normalize: image_url -> url for consistency
+        const newGen = { ...res.data, type: "image", url: res.data.image_url || res.data.url };
+        setGenerations(prev => [newGen, ...prev]);
         toast.success("Image generated!");
       } else if (mode === "video") {
         toast.info("Generating video... (2-5 mins)", { duration: 300000 });
         const res = await api.post("/video/generate", { prompt: userInput, duration: 5, style: videoStyle, session_id: currentSession?.id }, { timeout: 600000 });
-        setGenerations(prev => [res.data, ...prev]);
+        // Normalize: video_url -> url
+        const newGen = { ...res.data, type: "video", url: res.data.video_url || res.data.url };
+        setGenerations(prev => [newGen, ...prev]);
         toast.success("Video generated!");
       } else if (mode === "audio") {
         toast.info("Generating audio...", { duration: 60000 });
         const res = await api.post("/audio/generate", { prompt: userInput, duration: 10, type: "music" });
-        setGenerations(prev => [res.data, ...prev]);
+        // Normalize: audio_url -> url
+        const newGen = { ...res.data, type: "audio", url: res.data.audio_url || res.data.url };
+        setGenerations(prev => [newGen, ...prev]);
         toast.success("Audio generated!");
       } else if (mode === "file") {
         toast.info("Generating file...");
         const res = await api.post("/file/generate", { prompt: userInput, file_type: fileType });
-        setGenerations(prev => [res.data, ...prev]);
+        // Normalize: file_url -> url
+        const newGen = { ...res.data, type: "file", url: res.data.file_url || res.data.url };
+        setGenerations(prev => [newGen, ...prev]);
         toast.success("File generated!");
       }
     } catch (error) {
