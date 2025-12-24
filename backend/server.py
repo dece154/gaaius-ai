@@ -799,39 +799,6 @@ async def generate_file(request: FileGenerationRequest, user = Depends(get_curre
     except Exception as e:
         logger.error(f"File generation error: {e}")
         raise HTTPException(status_code=500, detail=f"File generation failed: {str(e)}")
-            max_tokens=4096
-        )
-        
-        content = completion.choices[0].message.content
-        
-        # Clean up code blocks if present
-        if "```" in content:
-            import re
-            code_match = re.search(r'```[\w]*\n?([\s\S]*?)```', content)
-            if code_match:
-                content = code_match.group(1).strip()
-        
-        gen_id = str(uuid.uuid4())
-        file_filename = f"{gen_id}.{ext}"
-        file_path = ROOT_DIR / "static" / "files" / file_filename
-        (ROOT_DIR / "static" / "files").mkdir(parents=True, exist_ok=True)
-        
-        with open(file_path, "w") as f:
-            f.write(content)
-        
-        file_url = f"/api/static/files/{file_filename}"
-        timestamp = datetime.now(timezone.utc).isoformat()
-        
-        await db.generations.insert_one({
-            "id": gen_id, "type": "file", "prompt": request.prompt, "url": file_url,
-            "file_type": request.file_type, "model_used": "Groq Llama 3.3", "timestamp": timestamp
-        })
-        
-        return {"id": gen_id, "file_url": file_url, "content": content, "model_used": "Groq Llama 3.3", "timestamp": timestamp}
-        
-    except Exception as e:
-        logger.error(f"File generation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 # ============== PROJECTS ==============
 
