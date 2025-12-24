@@ -621,7 +621,7 @@ const MainApp = () => {
         <div className="h-screen flex bg-[#050505] overflow-hidden">
           <Toaster position="top-center" theme="dark" />
           <Sidebar 
-            mode={mode} setMode={setMode} sessions={sessions} currentSession={currentSession}
+            mode={mode} setMode={handleModeChange} sessions={sessions} currentSession={currentSession}
             setCurrentSession={setCurrentSession} setSidebarOpen={setSidebarOpen} sidebarOpen={sidebarOpen}
             createSession={createSession} deleteSession={deleteSession} navigate={navigate}
             user={user} showAuth={() => setShowAuth(true)} showPro={() => setShowPro(true)} 
