@@ -813,11 +813,13 @@ async def create_project(data: ProjectCreate, user = Depends(get_current_user)):
         "name": data.name,
         "description": data.description,
         "type": data.type,
-        "files": [],
+        "files": {},
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
     await db.projects.insert_one(project)
+    # Return without _id
+    project.pop("_id", None)
     return project
 
 @api_router.get("/projects")
