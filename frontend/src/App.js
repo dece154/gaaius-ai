@@ -247,20 +247,20 @@ const ProModal = ({ open, onClose }) => {
   );
 };
 
-// Ad Component - Fixed positioning to not block content
+// Ad Component - Only shows for logged out users
 const AdBanner = ({ onUpgrade }) => {
   const ads = [
-    { text: "🚀 Go Pro for just $1 - No more ads!", cta: "Upgrade Now" },
-    { text: "⚡ Tired of ads? Pro users enjoy ad-free experience!", cta: "Get Pro" },
-    { text: "🎨 Unlock HD exports and longer videos with Pro!", cta: "Upgrade" }
+    { text: "🚀 Sign in to unlock all GAAIUS AI features!", cta: "Sign In" },
+    { text: "⚡ Create an account for unlimited AI generations!", cta: "Get Started" },
+    { text: "🎨 Sign in to save your work and access Pro features!", cta: "Sign In" }
   ];
   const [ad] = useState(ads[Math.floor(Math.random() * ads.length)]);
 
   return (
-    <div className="w-full p-2 glass border-t border-yellow-500/30">
+    <div className="w-full p-2 glass border-t border-primary/30">
       <div className="max-w-4xl mx-auto flex items-center justify-between">
         <p className="text-xs">{ad.text}</p>
-        <Button size="sm" onClick={onUpgrade} className="bg-yellow-500 hover:bg-yellow-600 text-black text-xs px-2 py-1 h-7">
+        <Button size="sm" onClick={onUpgrade} className="bg-primary hover:bg-primary/90 text-white text-xs px-2 py-1 h-7">
           {ad.cta}
         </Button>
       </div>
