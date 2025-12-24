@@ -626,10 +626,14 @@ const MainApp = () => {
 
   if (location.pathname === "/build") {
     return (
-      <div className="h-screen bg-[#050505]">
-        <Toaster position="top-center" theme="dark" />
-        <BuildPage />
-      </div>
+      <>
+        <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
+        <ProfileModal open={showProfile} onClose={() => setShowProfile(false)} />
+        <div className="h-screen bg-[#050505]">
+          <Toaster position="top-center" theme="dark" />
+          <BuildPage navigate={navigate} user={user} showAuth={() => setShowAuth(true)} showPro={() => setShowPro(true)} showProfile={() => setShowProfile(true)} logout={logout} />
+        </div>
+      </>
     );
   }
 
