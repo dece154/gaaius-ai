@@ -879,8 +879,8 @@ const MainApp = () => {
               </ScrollArea>
             )}
 
-            {/* Ad Banner - Only for non-pro users, positioned inline not overlapping */}
-            {user && !user.is_pro && <AdBanner onUpgrade={() => setShowPro(true)} />}
+            {/* Ad Banner - Only for logged-out users */}
+            {!user && <AdBanner onUpgrade={() => setShowAuth(true)} />}
 
             {/* Input - Fixed at bottom with proper spacing */}
             <div className="p-4 border-t border-white/10 glass">
