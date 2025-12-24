@@ -512,7 +512,11 @@ const ProjectsPage = () => {
 
 // Main App Component
 const MainApp = () => {
-  const [mode, setMode] = useState("chat");
+  // Persist mode in localStorage
+  const [mode, setMode] = useState(() => {
+    const savedMode = localStorage.getItem("gaaius_mode");
+    return savedMode || "chat";
+  });
   const [sessions, setSessions] = useState([]);
   const [currentSession, setCurrentSession] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -534,6 +538,20 @@ const MainApp = () => {
   const inputRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Save mode to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem("gaaius_mode", mode);
+  }, [mode]);
+
+  // Handle mode change with navigation
+  const handleModeChange = (newMode) => {
+    setMode(newMode);
+    // If on projects/build page, navigate to main page
+    if (location.pathname !== "/") {
+      navigate("/");
+    }
+  };
 
   // Check auth on mount
   useEffect(() => {
