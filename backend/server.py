@@ -301,9 +301,9 @@ async def create_payfast_payment(user = Depends(get_current_user)):
     data = {
         "merchant_id": PAYFAST_MERCHANT_ID,
         "merchant_key": PAYFAST_MERCHANT_KEY,
-        "return_url": f"https://multimodel-ai-hub-1.preview.emergentagent.com/?payment=success&id={payment_id}",
-        "cancel_url": "https://multimodel-ai-hub-1.preview.emergentagent.com/?payment=cancelled",
-        "notify_url": f"https://multimodel-ai-hub-1.preview.emergentagent.com/api/payment/payfast/notify",
+        "return_url": f"https://ai-command-hub-20.preview.emergentagent.com/?payment=success&id={payment_id}",
+        "cancel_url": "https://ai-command-hub-20.preview.emergentagent.com/?payment=cancelled",
+        "notify_url": f"https://ai-command-hub-20.preview.emergentagent.com/api/payment/payfast/notify",
         "amount": "18.00",  # ~$1 in ZAR
         "item_name": "GAAIUS AI Pro - 1 Month",
         "custom_str1": user["id"],
