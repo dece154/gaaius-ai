@@ -594,50 +594,56 @@ async def speech_to_text(audio: UploadFile = File(...), user = Depends(get_curre
 
 @api_router.post("/audio/generate")
 async def generate_audio(request: AudioGenerationRequest, user = Depends(get_current_user)):
-    """Generate music/sound effects - uses free API"""
+    """Generate audio content - spoken word, descriptions, or ambient sounds"""
     try:
-        import requests as req
-        import urllib.parse
-        
-        # Use Pollinations for audio generation (free)
-        encoded_prompt = urllib.parse.quote(f"Generate music: {request.prompt}")
-        
-        # Try to get audio from HuggingFace first
-        audio = None
-        try:
-            API_URL = "https://api-inference.huggingface.co/models/facebook/musicgen-small"
-            headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-            response = req.post(API_URL, headers=headers, json={"inputs": request.prompt}, timeout=120)
-            if response.status_code == 200 and 'audio' in response.headers.get('content-type', ''):
-                audio = response.content
-        except:
-            pass
-        
-        if not audio:
-            # Fallback: Generate a simple placeholder notification
-            raise HTTPException(status_code=503, detail="Audio generation is temporarily unavailable. HuggingFace free tier exceeded.")
+        from gtts import gTTS
         
         gen_id = str(uuid.uuid4())
-        audio_filename = f"{gen_id}.wav"
+        audio_filename = f"{gen_id}.mp3"
         audio_path = ROOT_DIR / "static" / "audio" / audio_filename
         (ROOT_DIR / "static" / "audio").mkdir(parents=True, exist_ok=True)
         
-        with open(audio_path, "wb") as f:
-            f.write(audio)
+        # Use Groq to generate descriptive content for the audio
+        audio_types = {
+            "music": "You are a music describer. Create a vivid, poetic 2-3 sentence description of what this music sounds like, as if describing it to someone who cannot hear it. Make it evocative and beautiful.",
+            "sfx": "You are a sound effect describer. Create a vivid 2-3 sentence description of this sound effect, as if narrating it for an audiobook.",
+            "ambient": "You are an ambient sound describer. Create a calming, immersive 2-3 sentence description of this ambient soundscape.",
+            "narration": "You are a narrator. Create engaging narration based on this prompt. Keep it to 2-3 sentences.",
+            "podcast": "You are a podcast host. Create an engaging introduction or segment based on this topic. Keep it to 3-4 sentences."
+        }
+        
+        system_prompt = audio_types.get(request.type, audio_types["narration"])
+        
+        # Generate the text content using Groq
+        completion = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": request.prompt}
+            ],
+            temperature=0.8,
+            max_tokens=300
+        )
+        
+        text_content = completion.choices[0].message.content
+        
+        # Convert to speech using gTTS (free, no limits)
+        tts = gTTS(text=text_content, lang='en', slow=False)
+        tts.save(str(audio_path))
         
         audio_url = f"/api/static/audio/{audio_filename}"
         timestamp = datetime.now(timezone.utc).isoformat()
         
         await db.generations.insert_one({
             "id": gen_id, "type": "audio", "prompt": request.prompt, "url": audio_url,
-            "model_used": "MusicGen (HuggingFace)", "timestamp": timestamp
+            "content": text_content, "audio_type": request.type, "timestamp": timestamp
         })
         
-        return {"id": gen_id, "audio_url": audio_url, "model_used": "MusicGen (HuggingFace)", "timestamp": timestamp}
+        return {"id": gen_id, "audio_url": audio_url, "content": text_content, "timestamp": timestamp}
         
     except Exception as e:
         logger.error(f"Audio generation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Audio generation failed: {str(e)}")
 
 # ============== FILE GENERATION ==============
 
