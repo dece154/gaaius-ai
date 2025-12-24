@@ -678,40 +678,50 @@ const MainApp = () => {
           return [...filtered, { ...tempUserMsg, id: `user-${Date.now()}` }, { id: res.data.id, role: "assistant", content: res.data.content, timestamp: res.data.timestamp }];
         });
       } else if (mode === "image") {
-        toast.info("Generating image...", { duration: 60000 });
+        const toastId = toast.loading("Generating image...");
         const res = await api.post("/image/generate", { prompt: userInput, session_id: currentSession?.id });
         const newGen = { ...res.data, type: "image", url: res.data.image_url || res.data.url };
         setGenerations(prev => [newGen, ...prev]);
+        toast.dismiss(toastId);
         toast.success("Image generated!");
       } else if (mode === "video") {
-        toast.info("Generating video in background... You can continue using other features", { duration: 10000 });
+        const toastId = toast.loading("Generating video... You can continue using other features");
         // Run video generation in background (non-blocking)
         api.post("/video/generate", { prompt: userInput, duration: 5, style: videoStyle, session_id: currentSession?.id }, { timeout: 600000 })
           .then(res => {
             const newGen = { ...res.data, type: "video", url: res.data.video_url || res.data.url };
             setGenerations(prev => [newGen, ...prev]);
+            toast.dismiss(toastId);
             toast.success("Video generated!");
           })
-          .catch(() => toast.error("Video generation failed"));
+          .catch(() => {
+            toast.dismiss(toastId);
+            toast.error("Video generation failed");
+          });
         setLoading(false);
         return; // Don't wait
       } else if (mode === "audio") {
-        toast.info("Generating audio in background...", { duration: 10000 });
+        const toastId = toast.loading("Generating audio...");
         // Run audio generation in background (non-blocking)
         api.post("/audio/generate", { prompt: userInput, duration: 10, type: "music" })
           .then(res => {
             const newGen = { ...res.data, type: "audio", url: res.data.audio_url || res.data.url };
             setGenerations(prev => [newGen, ...prev]);
+            toast.dismiss(toastId);
             toast.success("Audio generated!");
           })
-          .catch(() => toast.error("Audio generation failed"));
+          .catch(() => {
+            toast.dismiss(toastId);
+            toast.error("Audio generation failed");
+          });
         setLoading(false);
         return; // Don't wait
       } else if (mode === "file") {
-        toast.info("Generating file...");
+        const toastId = toast.loading("Generating file...");
         const res = await api.post("/file/generate", { prompt: userInput, file_type: fileType });
         const newGen = { ...res.data, type: "file", url: res.data.file_url || res.data.url };
         setGenerations(prev => [newGen, ...prev]);
+        toast.dismiss(toastId);
         toast.success("File generated!");
       }
     } catch (error) {
