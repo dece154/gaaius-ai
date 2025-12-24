@@ -649,20 +649,30 @@ async def generate_audio(request: AudioGenerationRequest, user = Depends(get_cur
 
 @api_router.post("/file/generate")
 async def generate_file(request: FileGenerationRequest, user = Depends(get_current_user)):
-    """Generate code/documents using Groq"""
+    """Generate code/documents including PDF, DOCX, XLSX"""
     try:
         system_prompts = {
-            "code": "You are an expert programmer. Generate clean, well-documented code based on the user's request. Output only the code, no explanations. Support Python, JavaScript, HTML, CSS, and other languages as requested.",
-            "document": "You are a professional document writer. Generate well-structured documents in the requested format. If user wants HTML, output HTML. If user wants plain text, output plain text. For documents, use proper formatting with headers and sections.",
-            "data": "You are a data expert. Generate sample data in the exact format requested - JSON, CSV, XML, or other formats. Output only the data, no explanations.",
-            "config": "You are a DevOps expert. Generate configuration files in the requested format (YAML, JSON, TOML, INI, .env, etc.) as requested. Output only the config, no explanations."
+            "code": "You are an expert programmer. Generate clean, well-documented code based on the user's request. Output only the code, no explanations.",
+            "document": "You are a professional document writer. Generate well-structured content with clear sections and paragraphs. Use markdown formatting with # for headers.",
+            "data": "You are a data expert. Generate sample data in the exact format requested - JSON, CSV, XML. Output only the data.",
+            "config": "You are a DevOps expert. Generate configuration files. Output only the config, no explanations."
         }
         
-        # Detect file type from prompt
         prompt_lower = request.prompt.lower()
         ext = "txt"
+        is_binary = False
         
-        if request.file_type == "code":
+        # Detect file format
+        if "pdf" in prompt_lower:
+            ext = "pdf"
+            is_binary = True
+        elif "docx" in prompt_lower or "word" in prompt_lower:
+            ext = "docx"
+            is_binary = True
+        elif "xlsx" in prompt_lower or "excel" in prompt_lower:
+            ext = "xlsx"
+            is_binary = True
+        elif request.file_type == "code":
             if "python" in prompt_lower or ".py" in prompt_lower:
                 ext = "py"
             elif "javascript" in prompt_lower or ".js" in prompt_lower:
@@ -673,20 +683,12 @@ async def generate_file(request: FileGenerationRequest, user = Depends(get_curre
                 ext = "html"
             elif "css" in prompt_lower:
                 ext = "css"
-            elif "java" in prompt_lower and "javascript" not in prompt_lower:
-                ext = "java"
-            elif "c++" in prompt_lower or "cpp" in prompt_lower:
-                ext = "cpp"
-            elif "rust" in prompt_lower:
-                ext = "rs"
-            elif "go" in prompt_lower:
-                ext = "go"
             else:
                 ext = "py"
         elif request.file_type == "document":
             if "html" in prompt_lower:
                 ext = "html"
-            elif "txt" in prompt_lower or "text" in prompt_lower:
+            elif "txt" in prompt_lower:
                 ext = "txt"
             else:
                 ext = "md"
@@ -695,8 +697,6 @@ async def generate_file(request: FileGenerationRequest, user = Depends(get_curre
                 ext = "csv"
             elif "xml" in prompt_lower:
                 ext = "xml"
-            elif "sql" in prompt_lower:
-                ext = "sql"
             else:
                 ext = "json"
         elif request.file_type == "config":
@@ -704,20 +704,101 @@ async def generate_file(request: FileGenerationRequest, user = Depends(get_curre
                 ext = "yaml"
             elif "toml" in prompt_lower:
                 ext = "toml"
-            elif "ini" in prompt_lower:
-                ext = "ini"
-            elif "env" in prompt_lower:
-                ext = "env"
             else:
                 ext = "json"
         
+        # Generate content using Groq
         completion = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
-                {"role": "system", "content": system_prompts.get(request.file_type, system_prompts["code"])},
+                {"role": "system", "content": system_prompts.get(request.file_type, system_prompts["document"])},
                 {"role": "user", "content": request.prompt}
             ],
             temperature=0.3,
+            max_tokens=4096
+        )
+        
+        content = completion.choices[0].message.content
+        
+        # Clean up code blocks
+        if "```" in content:
+            import re
+            code_match = re.search(r'```[\w]*\n?([\s\S]*?)```', content)
+            if code_match:
+                content = code_match.group(1).strip()
+        
+        gen_id = str(uuid.uuid4())
+        file_filename = f"{gen_id}.{ext}"
+        file_path = ROOT_DIR / "static" / "files" / file_filename
+        (ROOT_DIR / "static" / "files").mkdir(parents=True, exist_ok=True)
+        
+        # Generate binary files (PDF, DOCX, XLSX)
+        if ext == "pdf":
+            from reportlab.lib.pagesizes import letter
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            
+            doc = SimpleDocTemplate(str(file_path), pagesize=letter)
+            styles = getSampleStyleSheet()
+            story = []
+            
+            for line in content.split('\n'):
+                if line.startswith('# '):
+                    story.append(Paragraph(line[2:], styles['Heading1']))
+                elif line.startswith('## '):
+                    story.append(Paragraph(line[3:], styles['Heading2']))
+                elif line.strip():
+                    story.append(Paragraph(line, styles['Normal']))
+                story.append(Spacer(1, 6))
+            
+            doc.build(story)
+            
+        elif ext == "docx":
+            from docx import Document
+            from docx.shared import Pt
+            
+            doc = Document()
+            for line in content.split('\n'):
+                if line.startswith('# '):
+                    doc.add_heading(line[2:], level=1)
+                elif line.startswith('## '):
+                    doc.add_heading(line[3:], level=2)
+                elif line.startswith('### '):
+                    doc.add_heading(line[4:], level=3)
+                elif line.strip():
+                    doc.add_paragraph(line)
+            doc.save(str(file_path))
+            
+        elif ext == "xlsx":
+            from openpyxl import Workbook
+            
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Data"
+            
+            for i, line in enumerate(content.split('\n'), 1):
+                if line.strip():
+                    cells = line.split(',') if ',' in line else [line]
+                    for j, cell in enumerate(cells, 1):
+                        ws.cell(row=i, column=j, value=cell.strip())
+            wb.save(str(file_path))
+        else:
+            with open(file_path, "w") as f:
+                f.write(content)
+        
+        file_url = f"/api/static/files/{file_filename}"
+        timestamp = datetime.now(timezone.utc).isoformat()
+        
+        await db.generations.insert_one({
+            "id": gen_id, "type": "file", "prompt": request.prompt, "url": file_url,
+            "file_type": ext, "content": content if not is_binary else f"[{ext.upper()} file]", "timestamp": timestamp
+        })
+        
+        return {"id": gen_id, "file_url": file_url, "content": content if not is_binary else f"[{ext.upper()} file generated]", "file_type": ext, "timestamp": timestamp}
+        
+    except Exception as e:
+        logger.error(f"File generation error: {e}")
+        raise HTTPException(status_code=500, detail=f"File generation failed: {str(e)}")
             max_tokens=4096
         )
         
