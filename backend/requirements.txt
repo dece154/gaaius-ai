@@ -21,6 +21,7 @@ dnspython==2.8.0
 ecdsa==0.19.1
 email-validator==2.3.0
 emergentintegrations==0.1.0
+et_xmlfile==2.0.0
 fastapi==0.110.1
 fastuuid==0.14.0
 filelock==3.20.1
@@ -59,6 +60,7 @@ jsonschema==4.25.1
 jsonschema-specifications==2025.9.1
 librt==0.7.3
 litellm==1.80.0
+lxml==6.0.2
 markdown-it-py==4.0.0
 MarkupSafe==3.0.3
 mccabe==0.7.0
@@ -71,6 +73,7 @@ mypy_extensions==1.1.0
 numpy==2.3.5
 oauthlib==3.3.1
 openai==1.99.9
+openpyxl==3.1.5
 packaging==25.0
 pandas==2.3.3
 passlib==1.7.4
@@ -97,6 +100,7 @@ pymongo==4.5.0
 pyparsing==3.2.5
 pytest==9.0.2
 python-dateutil==2.9.0.post0
+python-docx==1.2.0
 python-dotenv==1.2.1
 python-jose==3.5.0
 python-multipart==0.0.20
@@ -106,6 +110,7 @@ PyYAML==6.0.3
 referencing==0.37.0
 regex==2025.11.3
 replicate==1.0.7
+reportlab==4.4.7
 requests==2.32.5
 requests-oauthlib==2.0.0
 rich==14.2.0
