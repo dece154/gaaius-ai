@@ -310,13 +310,13 @@ const GenerationResult = ({ data, type }) => {
 };
 
 // Build Page Component
-const BuildPage = () => {
+const BuildPage = ({ showSidebar = false, navigate, user, showAuth, showPro, showProfile, logout }) => {
   const [prompt, setPrompt] = useState("");
   const [code, setCode] = useState('<div className="p-8 text-center">\n  <h1 className="text-3xl font-bold">Hello World</h1>\n  <p className="text-muted-foreground mt-2">Start building something amazing!</p>\n</div>');
   const [loading, setLoading] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const navigate = useNavigate();
+  const nav = useNavigate();
 
   const handleGenerate = async () => {
     if (!prompt.trim() || loading) return;
@@ -340,14 +340,14 @@ const BuildPage = () => {
       await api.put(`/projects/${res.data.id}/files`, { "index.jsx": code });
       toast.success("Saved to project!");
       setShowSaveDialog(false);
-      navigate("/projects");
+      (navigate || nav)("/projects");
     } catch (error) {
       toast.error("Failed to save");
     }
   };
 
   return (
-    <div className="h-full flex">
+    <div className="h-full flex flex-col">
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
         <DialogContent className="glass border-white/10">
           <DialogHeader><DialogTitle>Save to Project</DialogTitle></DialogHeader>
@@ -356,46 +356,55 @@ const BuildPage = () => {
         </DialogContent>
       </Dialog>
       
-      {/* Left: Chat */}
-      <div className="w-1/2 border-r border-white/10 flex flex-col">
-        <div className="p-4 border-b border-white/10 flex items-center justify-between">
-          <h2 className="font-secondary text-lg font-bold flex items-center gap-2">
-            <Hammer className="w-5 h-5 text-primary" /> Vibe Coder
-          </h2>
-          <Button size="sm" onClick={() => setShowSaveDialog(true)} variant="outline" className="h-8">
-            <Save className="w-4 h-4 mr-1" /> Save to Project
+      {/* Header with Back Button */}
+      <div className="h-14 border-b border-white/10 flex items-center justify-between px-4 glass">
+        <div className="flex items-center gap-3">
+          <Button size="sm" variant="ghost" onClick={() => (navigate || nav)("/")} className="h-8">
+            <X className="w-4 h-4 mr-1" /> Back to Dashboard
           </Button>
+          <h2 className="font-secondary text-lg font-bold flex items-center gap-2">
+            <Hammer className="w-5 h-5 text-primary" /> GAAIUS AI Builder
+          </h2>
         </div>
-        <div className="flex-1 p-4">
-          <div className="glass-light rounded-xl p-4 h-full flex flex-col">
-            <pre className="flex-1 text-xs overflow-auto">{code}</pre>
-          </div>
-        </div>
-        <div className="p-4 border-t border-white/10">
-          <div className="flex gap-2">
-            <Input
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Describe what you want to build..."
-              className="flex-1 bg-white/5 border-white/10"
-              onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
-            />
-            <Button onClick={handleGenerate} disabled={loading} className="bg-primary">
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            </Button>
-          </div>
-        </div>
+        <Button size="sm" onClick={() => setShowSaveDialog(true)} variant="outline" className="h-8">
+          <Save className="w-4 h-4 mr-1" /> Save to Project
+        </Button>
       </div>
       
-      {/* Right: Preview */}
-      <div className="w-1/2 flex flex-col">
-        <div className="p-4 border-b border-white/10">
-          <h2 className="font-secondary text-lg font-bold flex items-center gap-2">
-            <Eye className="w-5 h-5 text-cyan-400" /> Preview
-          </h2>
+      <div className="flex-1 flex">
+        {/* Left: Code Editor */}
+        <div className="w-1/2 border-r border-white/10 flex flex-col">
+          <div className="flex-1 p-4">
+            <div className="glass-light rounded-xl p-4 h-full flex flex-col">
+              <pre className="flex-1 text-xs overflow-auto">{code}</pre>
+            </div>
+          </div>
+          <div className="p-4 border-t border-white/10">
+            <div className="flex gap-2">
+              <Input
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Describe what you want to build..."
+                className="flex-1 bg-white/5 border-white/10"
+                onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
+              />
+              <Button onClick={handleGenerate} disabled={loading} className="bg-primary">
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              </Button>
+            </div>
+          </div>
         </div>
-        <div className="flex-1 p-4 bg-white text-black overflow-auto">
-          <div dangerouslySetInnerHTML={{ __html: code.replace(/className=/g, 'class=') }} />
+        
+        {/* Right: Preview */}
+        <div className="w-1/2 flex flex-col">
+          <div className="p-4 border-b border-white/10">
+            <h2 className="font-secondary text-lg font-bold flex items-center gap-2">
+              <Eye className="w-5 h-5 text-cyan-400" /> Preview
+            </h2>
+          </div>
+          <div className="flex-1 p-4 bg-white text-black overflow-auto">
+            <div dangerouslySetInnerHTML={{ __html: code.replace(/className=/g, 'class=') }} />
+          </div>
         </div>
       </div>
     </div>
