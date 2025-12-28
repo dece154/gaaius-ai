@@ -376,6 +376,88 @@ class GAAIUSAPITester:
         )
         return success
 
+    def test_projects_api(self):
+        """Test projects creation and listing"""
+        if not self.token:
+            print("❌ No token available for projects test")
+            return False
+
+        # Test project creation
+        success, response = self.run_test(
+            "Create Project",
+            "POST",
+            "projects",
+            200,
+            data={
+                "name": "Test Project",
+                "description": "A test project for API testing",
+                "type": "web"
+            }
+        )
+        
+        project_id = None
+        if success and 'id' in response:
+            project_id = response['id']
+            print(f"   Created project: {project_id}")
+        
+        # Test projects listing
+        success2, response2 = self.run_test(
+            "List Projects",
+            "GET",
+            "projects",
+            200
+        )
+        
+        if success2:
+            print(f"   Found {len(response2)} projects")
+        
+        return success and success2
+
+    def test_audio_narration(self):
+        """Test the new audio narration endpoint"""
+        success, response = self.run_test(
+            "Audio Narration Generation",
+            "POST",
+            "audio/generate",
+            200,
+            data={
+                "prompt": "Hello, this is a test of the audio narration feature.",
+                "duration": 10,
+                "type": "music"
+            },
+            timeout=60
+        )
+        
+        if success:
+            print(f"   Generated audio: {response.get('audio_url', '')[:50]}...")
+            print(f"   Language: {response.get('language', 'Unknown')}")
+            if response.get('content'):
+                print(f"   Narration text: {response['content'][:100]}...")
+        return success
+
+    def test_build_functionality(self):
+        """Test the build/generate-full endpoint"""
+        success, response = self.run_test(
+            "Build Full Project Generation",
+            "POST",
+            "build/generate-full",
+            200,
+            data={
+                "prompt": "Create a simple landing page with a header and footer",
+                "current_files": {},
+                "project_type": "web"
+            },
+            timeout=60
+        )
+        
+        if success:
+            files = response.get('files', {})
+            print(f"   Generated {len(files)} files")
+            for filename in files.keys():
+                print(f"     - {filename}")
+            print(f"   Message: {response.get('message', 'No message')}")
+        return success
+
     def run_all_tests(self):
         """Run all API tests"""
         print("🚀 Starting GAAIUS AI Backend API Tests")
