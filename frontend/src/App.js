@@ -1252,11 +1252,62 @@ const MainApp = () => {
                   <div ref={messagesEndRef} />
                 </div>
               </ScrollArea>
+            ) : mode === "file" ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-8">
+                <div className="max-w-lg text-center">
+                  <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center mb-6 mx-auto">
+                    <FileCode className="w-12 h-12 text-cyan-400" />
+                  </div>
+                  <h2 className="font-secondary text-3xl font-bold mb-3 bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
+                    GAAIUS AI Document Studio
+                  </h2>
+                  <p className="text-muted-foreground mb-6">
+                    The world's first fully AI-driven document platform. Create invoices, contracts, proposals, spreadsheets, and more - all through AI chat.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 mb-8 text-sm">
+                    <div className="glass rounded-xl p-3 text-left">
+                      <span className="text-lg">📄</span>
+                      <p className="font-medium mt-1">PDF & Word</p>
+                      <p className="text-xs text-muted-foreground">Professional documents</p>
+                    </div>
+                    <div className="glass rounded-xl p-3 text-left">
+                      <span className="text-lg">📊</span>
+                      <p className="font-medium mt-1">Excel Sheets</p>
+                      <p className="text-xs text-muted-foreground">Data & calculations</p>
+                    </div>
+                    <div className="glass rounded-xl p-3 text-left">
+                      <span className="text-lg">🧾</span>
+                      <p className="font-medium mt-1">Invoices</p>
+                      <p className="text-xs text-muted-foreground">Business billing</p>
+                    </div>
+                    <div className="glass rounded-xl p-3 text-left">
+                      <span className="text-lg">⚖️</span>
+                      <p className="font-medium mt-1">Contracts</p>
+                      <p className="text-xs text-muted-foreground">Legal agreements</p>
+                    </div>
+                  </div>
+                  <Button onClick={() => navigate("/documents")} className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 px-8 py-6 text-lg">
+                    <FileCode className="w-5 h-5 mr-2" /> Open Document Studio
+                  </Button>
+                </div>
+                
+                {/* Quick file generation below */}
+                {generations.filter(g => g.type === "file").length > 0 && (
+                  <div className="mt-8 w-full max-w-4xl">
+                    <h3 className="text-sm font-semibold mb-3 text-muted-foreground">Recent Files</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {generations.filter(g => g.type === "file").slice(0, 6).map(gen => (
+                        <GenerationResult key={gen.id} data={gen} type={gen.type} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             ) : (
               <ScrollArea className="flex-1">
                 <div className="max-w-6xl mx-auto p-4 md:p-6 pb-8">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {generations.filter(g => g.type === mode || (mode === "file" && g.type === "file")).map(gen => (
+                    {generations.filter(g => g.type === mode).map(gen => (
                       <GenerationResult key={gen.id} data={gen} type={gen.type} />
                     ))}
                     {generations.filter(g => g.type === mode).length === 0 && (
