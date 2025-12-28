@@ -921,6 +921,88 @@ async def build_generate(data: dict, user = Depends(get_current_user)):
         logger.error(f"Build generate error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.post("/build/generate-full")
+async def build_generate_full(data: dict, user = Depends(get_current_user)):
+    """Generate a full web project with multiple files"""
+    try:
+        prompt = data.get("prompt", "")
+        current_files = data.get("current_files", {})
+        project_type = data.get("project_type", "web")
+        
+        system_prompt = """You are an expert full-stack web developer. You build REAL, functional websites and applications.
+
+When the user asks you to build something, you must:
+1. Create complete, working HTML files with embedded Tailwind CSS
+2. Create proper JavaScript for interactivity
+3. Create CSS for custom styling
+4. Make it fully functional - not demos or mockups
+
+Output format: Return a JSON object with:
+- "files": an object where keys are filenames and values are the complete file contents
+- "message": a brief description of what you built
+
+Example response format:
+{
+  "files": {
+    "index.html": "<!DOCTYPE html>...",
+    "script.js": "// JavaScript code...",
+    "style.css": "/* CSS styles */"
+  },
+  "message": "I built a responsive landing page with..."
+}
+
+IMPORTANT:
+- Use Tailwind CSS via CDN in HTML
+- Make the code production-ready
+- Include proper meta tags and structure
+- Add real functionality, not placeholder text
+- Output ONLY valid JSON, no markdown or explanations"""
+        
+        # Build context from current files
+        files_context = ""
+        if current_files:
+            files_context = "Current project files:\n"
+            for filename, content in current_files.items():
+                files_context += f"\n--- {filename} ---\n{content[:500]}...\n"
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"{files_context}\n\nUser request: {prompt}\n\nGenerate the updated/new files as JSON."}
+        ]
+        
+        completion = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=messages,
+            temperature=0.3,
+            max_tokens=8000
+        )
+        
+        response_text = completion.choices[0].message.content.strip()
+        
+        # Try to parse JSON response
+        try:
+            # Remove markdown code blocks if present
+            if response_text.startswith("```"):
+                response_text = response_text.split("```")[1]
+                if response_text.startswith("json"):
+                    response_text = response_text[4:]
+            
+            result = json.loads(response_text)
+            return {
+                "files": result.get("files", {}),
+                "message": result.get("message", "Code updated!")
+            }
+        except json.JSONDecodeError:
+            # If not valid JSON, treat as single HTML file update
+            return {
+                "files": {"index.html": response_text},
+                "message": "I've updated your index.html"
+            }
+        
+    except Exception as e:
+        logger.error(f"Build generate-full error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ============== STATIC FILES ==============
 
 @api_router.get("/static/{filename}")
