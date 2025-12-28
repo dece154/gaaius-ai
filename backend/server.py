@@ -595,7 +595,7 @@ async def speech_to_text(audio: UploadFile = File(...), user = Depends(get_curre
 
 @api_router.post("/audio/generate")
 async def generate_audio(request: AudioGenerationRequest, user = Depends(get_current_user)):
-    """Generate audio narration - reads whatever you type in different voices and languages"""
+    """Generate audio narration - AI creates stories, narrates text, or reads whatever you type"""
     try:
         from gtts import gTTS
         
@@ -632,29 +632,58 @@ async def generate_audio(request: AudioGenerationRequest, user = Depends(get_cur
         elif any(word in prompt_lower for word in ['hindi', 'हिंदी']):
             lang = 'hi'
         
-        # Clean the prompt - remove language instructions for cleaner narration
-        text_to_narrate = request.prompt
-        for remove_word in ['in spanish', 'in french', 'in german', 'in italian', 'in portuguese', 
-                           'in chinese', 'in japanese', 'in korean', 'in russian', 'in arabic', 'in hindi',
-                           'spanish:', 'french:', 'german:', 'narrate:', 'say:', 'read:']:
-            text_to_narrate = text_to_narrate.lower().replace(remove_word, '').strip()
+        # Detect if user wants a story or creative content
+        is_story_request = any(word in prompt_lower for word in [
+            'story', 'tell me', 'create a', 'write a', 'make a', 'narrate a',
+            'story about', 'tale', 'adventure', 'explain', 'describe'
+        ])
         
-        # If the text is very short, just narrate it directly
-        # Otherwise, use AI to expand it into proper narration
-        if len(text_to_narrate) < 50:
-            narration_text = text_to_narrate
-        else:
-            # Use Groq to create a natural narration
+        # Extract duration if specified (e.g., "2 minutes", "30 seconds")
+        import re
+        duration_match = re.search(r'(\d+)\s*(minute|min|second|sec)', prompt_lower)
+        target_words = 150  # Default ~1 minute
+        if duration_match:
+            num = int(duration_match.group(1))
+            unit = duration_match.group(2)
+            if 'min' in unit:
+                target_words = num * 150  # ~150 words per minute
+            else:
+                target_words = max(30, num * 2)  # ~2 words per second
+        
+        if is_story_request:
+            # Use AI to create the story/content
             completion = groq_client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[
-                    {"role": "system", "content": "You are a professional narrator. Simply narrate the given text in a clear, engaging way. Do not add music descriptions or sound effects. Just read/narrate the content naturally. Keep it concise."},
-                    {"role": "user", "content": f"Narrate this: {text_to_narrate}"}
+                    {"role": "system", "content": f"""You are a master storyteller and narrator. Create engaging, vivid content based on the user's request.
+- If they ask for a story, write an entertaining story with characters and plot
+- If they ask for an explanation, provide a clear and engaging explanation
+- If they ask for a description, paint a vivid picture with words
+- Target approximately {target_words} words
+- Make it suitable for audio narration (no visual elements, emojis, or formatting)
+- Use natural, flowing language that sounds great when read aloud"""},
+                    {"role": "user", "content": request.prompt}
                 ],
-                temperature=0.5,
-                max_tokens=500
+                temperature=0.8,
+                max_tokens=min(4000, target_words * 2)
             )
             narration_text = completion.choices[0].message.content
+        else:
+            # Direct narration - just read what they typed or enhance slightly
+            if len(request.prompt) < 20:
+                narration_text = request.prompt
+            else:
+                # Light enhancement for better narration
+                completion = groq_client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[
+                        {"role": "system", "content": "You are a narrator. Take the user's text and narrate it naturally. Keep the original meaning but make it flow well for audio. Do not add extra content, just narrate what they provided."},
+                        {"role": "user", "content": f"Narrate this: {request.prompt}"}
+                    ],
+                    temperature=0.3,
+                    max_tokens=1000
+                )
+                narration_text = completion.choices[0].message.content
         
         # Convert to speech using gTTS
         tts = gTTS(text=narration_text, lang=lang, slow=False)
@@ -676,7 +705,7 @@ async def generate_audio(request: AudioGenerationRequest, user = Depends(get_cur
         
     except Exception as e:
         logger.error(f"Audio generation error: {e}")
-        raise HTTPException(status_code=500, detail=f"Audio generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Audio generation failed: {str(e)}"}
 
 # ============== FILE GENERATION ==============
 
