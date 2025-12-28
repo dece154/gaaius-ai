@@ -493,6 +493,12 @@ class GAAIUSAPITester:
         self.test_tts()
         self.test_file_generation()
         
+        # Test new features specifically mentioned in review request
+        print("\n🔧 Testing New Features...")
+        self.test_projects_api()
+        self.test_audio_narration()
+        self.test_build_functionality()
+        
         # Skip video test for now as it takes too long for initial testing
         print("⏭️  Skipping video generation test (takes 2-5 minutes)")
         
