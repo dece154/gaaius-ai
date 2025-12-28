@@ -17,6 +17,7 @@ import io
 import hashlib
 import jwt
 import requests
+import json
 
 # Load environment variables
 ROOT_DIR = Path(__file__).parent
