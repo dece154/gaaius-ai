@@ -309,41 +309,41 @@ const GenerationResult = ({ data, type }) => {
   );
 };
 
-// Build Page Component - Replit-like Builder
+// Build Page Component - GAAIUS AI Builder (Simplified: AI Chat + Live Preview)
 const BuildPage = ({ showSidebar = false, navigate, user, showAuth, showPro, showProfile, logout }) => {
   const [prompt, setPrompt] = useState("");
-  const [files, setFiles] = useState({
-    "index.html": `<!DOCTYPE html>
+  const [htmlContent, setHtmlContent] = useState(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My App</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Inter', sans-serif; }
+  </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen">
-  <div id="app" class="container mx-auto p-8">
-    <h1 class="text-4xl font-bold text-center mb-4">Welcome to GAAIUS Builder</h1>
-    <p class="text-gray-400 text-center">Describe what you want to build and I'll create it for you!</p>
-  </div>
+<body class="bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 text-white min-h-screen">
+  <nav class="fixed top-0 w-full bg-black/50 backdrop-blur-xl border-b border-white/10 z-50">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+      <h1 class="text-xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">MyApp</h1>
+      <div class="flex gap-4">
+        <a href="#" class="text-gray-300 hover:text-white transition">Features</a>
+        <a href="#" class="text-gray-300 hover:text-white transition">Pricing</a>
+        <button class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg font-medium transition">Get Started</button>
+      </div>
+    </div>
+  </nav>
+  <main class="pt-24 px-6">
+    <div class="max-w-4xl mx-auto text-center py-20">
+      <h2 class="text-5xl font-bold mb-6 bg-gradient-to-r from-white via-purple-200 to-pink-200 bg-clip-text text-transparent">Build Something Amazing</h2>
+      <p class="text-xl text-gray-400 mb-8">Tell GAAIUS AI what you want to build and watch it come to life instantly.</p>
+      <button class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 px-8 py-4 rounded-xl font-semibold text-lg transition transform hover:scale-105">Start Building →</button>
+    </div>
+  </main>
 </body>
-</html>`,
-    "style.css": `/* Custom styles */
-body {
-  font-family: system-ui, -apple-system, sans-serif;
-}
-
-.container {
-  max-width: 1200px;
-}`,
-    "script.js": `// Your JavaScript code
-console.log('App loaded!');
-
-document.addEventListener('DOMContentLoaded', function() {
-  console.log('DOM ready');
-});`
-  });
-  const [activeFile, setActiveFile] = useState("index.html");
+</html>`);
   const [loading, setLoading] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -353,48 +353,18 @@ document.addEventListener('DOMContentLoaded', function() {
   const handleGenerate = async () => {
     if (!prompt.trim() || loading) return;
     setLoading(true);
-    
-    // Add user message to chat
     setChatHistory(prev => [...prev, { role: "user", content: prompt }]);
     
     try {
-      const res = await api.post("/build/generate-full", { 
-        prompt, 
-        current_files: files,
-        project_type: "web"
-      });
-      
-      if (res.data.files) {
-        setFiles(prev => ({ ...prev, ...res.data.files }));
+      const res = await api.post("/build/generate", { prompt, current_code: htmlContent });
+      if (res.data.code) {
+        setHtmlContent(res.data.code);
+        setChatHistory(prev => [...prev, { role: "assistant", content: "Done! I've updated your website. Check the preview!" }]);
+        toast.success("Website updated!");
       }
-      
-      // Add assistant response to chat
-      setChatHistory(prev => [...prev, { 
-        role: "assistant", 
-        content: res.data.message || "I've updated your code. Check the preview!"
-      }]);
-      
-      toast.success("Code generated!");
     } catch (error) {
-      setChatHistory(prev => [...prev, { 
-        role: "assistant", 
-        content: "Sorry, I encountered an error. Please try again."
-      }]);
-      toast.error("Generation failed - trying simpler approach");
-      
-      // Fallback to simple generation
-      try {
-        const fallbackRes = await api.post("/build/generate", { prompt, current_code: files["index.html"] });
-        if (fallbackRes.data.code) {
-          setFiles(prev => ({ ...prev, "index.html": fallbackRes.data.code }));
-          setChatHistory(prev => [...prev, { 
-            role: "assistant", 
-            content: "I've updated your HTML. Check the preview!"
-          }]);
-        }
-      } catch (e) {
-        console.error(e);
-      }
+      setChatHistory(prev => [...prev, { role: "assistant", content: "I encountered an issue. Let me try again..." }]);
+      toast.error("Generation failed");
     } finally {
       setLoading(false);
       setPrompt("");
@@ -405,7 +375,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!projectName.trim()) return;
     try {
       const res = await api.post("/projects", { name: projectName, description: "Created from Build", type: "web" });
-      await api.put(`/projects/${res.data.id}/files`, files);
+      await api.put(`/projects/${res.data.id}/files`, { "index.html": htmlContent });
       toast.success("Saved to project!");
       setShowSaveDialog(false);
       (navigate || nav)("/projects");
@@ -414,56 +384,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   };
 
-  const downloadFiles = () => {
-    // Create a zip-like download of all files
-    Object.entries(files).forEach(([filename, content]) => {
-      const blob = new Blob([content], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-    });
-    toast.success("Files downloaded!");
-  };
-
-  const addNewFile = () => {
-    const filename = window.prompt("Enter filename (e.g., component.js):");
-    if (filename && !files[filename]) {
-      setFiles(prev => ({ ...prev, [filename]: `// ${filename}\n` }));
-      setActiveFile(filename);
-    }
-  };
-
-  const deleteFile = (filename) => {
-    if (Object.keys(files).length <= 1) {
-      toast.error("Cannot delete the last file");
-      return;
-    }
-    const newFiles = { ...files };
-    delete newFiles[filename];
-    setFiles(newFiles);
-    if (activeFile === filename) {
-      setActiveFile(Object.keys(newFiles)[0]);
-    }
-  };
-
-  // Generate preview HTML
-  const getPreviewContent = () => {
-    let html = files["index.html"] || "";
-    
-    // Inject CSS if exists
-    if (files["style.css"]) {
-      html = html.replace("</head>", `<style>${files["style.css"]}</style></head>`);
-    }
-    
-    // Inject JS if exists
-    if (files["script.js"]) {
-      html = html.replace("</body>", `<script>${files["script.js"]}</script></body>`);
-    }
-    
-    return html;
+  const downloadProject = () => {
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'website.html';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Website downloaded!");
   };
 
   return (
@@ -484,11 +413,11 @@ document.addEventListener('DOMContentLoaded', function() {
           </Button>
           <div className="h-4 w-px bg-white/20" />
           <h2 className="font-secondary text-sm font-bold flex items-center gap-2">
-            <Hammer className="w-4 h-4 text-primary" /> GAAIUS Builder
+            <Hammer className="w-4 h-4 text-primary" /> GAAIUS AI Builder
           </h2>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" onClick={downloadFiles} variant="outline" className="h-7 text-xs">
+          <Button size="sm" onClick={downloadProject} variant="outline" className="h-7 text-xs">
             <Download className="w-3 h-3 mr-1" /> Download
           </Button>
           <Button size="sm" onClick={() => setShowSaveDialog(true)} variant="default" className="h-7 text-xs bg-primary">
@@ -498,6 +427,82 @@ document.addEventListener('DOMContentLoaded', function() {
       </div>
       
       <div className="flex-1 flex overflow-hidden">
+        {/* Left: AI Chat */}
+        <div className="w-96 border-r border-white/10 flex flex-col bg-[#0d0d0d]">
+          <div className="p-4 border-b border-white/10">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              <span className="font-semibold">AI Assistant</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Tell me what website you want to build</p>
+          </div>
+          
+          <ScrollArea className="flex-1 p-4">
+            {chatHistory.length === 0 ? (
+              <div className="text-center py-8">
+                <Hammer className="w-12 h-12 text-primary/50 mx-auto mb-4" />
+                <p className="text-sm text-muted-foreground mb-4">What would you like to build?</p>
+                <div className="space-y-2 text-xs">
+                  <p className="text-primary/70 cursor-pointer hover:text-primary" onClick={() => setPrompt("Build a modern SaaS landing page")}>💡 "Build a modern SaaS landing page"</p>
+                  <p className="text-primary/70 cursor-pointer hover:text-primary" onClick={() => setPrompt("Create an e-commerce product page")}>💡 "Create an e-commerce product page"</p>
+                  <p className="text-primary/70 cursor-pointer hover:text-primary" onClick={() => setPrompt("Make a portfolio website for a designer")}>💡 "Make a portfolio website"</p>
+                  <p className="text-primary/70 cursor-pointer hover:text-primary" onClick={() => setPrompt("Build a dashboard with charts and stats")}>💡 "Build a dashboard with charts"</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {chatHistory.map((msg, i) => (
+                  <div key={i} className={`p-3 rounded-xl text-sm ${msg.role === "user" ? "bg-primary/20 ml-4" : "bg-white/5 mr-4"}`}>
+                    <p className="text-xs text-muted-foreground mb-1">{msg.role === "user" ? "You" : "GAAIUS AI"}</p>
+                    {msg.content}
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+          
+          <div className="p-4 border-t border-white/10">
+            <div className="flex gap-2">
+              <Input
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Describe what to build..."
+                className="flex-1 bg-white/5 border-white/10"
+                onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
+              />
+              <Button onClick={handleGenerate} disabled={loading} className="bg-primary">
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              </Button>
+            </div>
+          </div>
+        </div>
+        
+        {/* Right: Live Preview */}
+        <div className="flex-1 flex flex-col">
+          <div className="h-10 border-b border-white/10 flex items-center justify-between px-4 bg-[#111]">
+            <div className="flex items-center gap-2">
+              <Eye className="w-4 h-4 text-cyan-400" />
+              <span className="text-sm font-mono">Live Preview</span>
+            </div>
+            <div className="flex gap-1">
+              <div className="w-3 h-3 rounded-full bg-red-500" />
+              <div className="w-3 h-3 rounded-full bg-yellow-500" />
+              <div className="w-3 h-3 rounded-full bg-green-500" />
+            </div>
+          </div>
+          <div className="flex-1 bg-white">
+            <iframe
+              srcDoc={htmlContent}
+              className="w-full h-full border-0"
+              title="Preview"
+              sandbox="allow-scripts allow-same-origin"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
         {/* Left: Chat Panel */}
         <div className="w-80 border-r border-white/10 flex flex-col bg-[#0d0d0d]">
           <div className="p-3 border-b border-white/10">
