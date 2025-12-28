@@ -309,24 +309,92 @@ const GenerationResult = ({ data, type }) => {
   );
 };
 
-// Build Page Component
+// Build Page Component - Replit-like Builder
 const BuildPage = ({ showSidebar = false, navigate, user, showAuth, showPro, showProfile, logout }) => {
   const [prompt, setPrompt] = useState("");
-  const [code, setCode] = useState('<div className="p-8 text-center">\n  <h1 className="text-3xl font-bold">Hello World</h1>\n  <p className="text-muted-foreground mt-2">Start building something amazing!</p>\n</div>');
+  const [files, setFiles] = useState({
+    "index.html": `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+  <div id="app" class="container mx-auto p-8">
+    <h1 class="text-4xl font-bold text-center mb-4">Welcome to GAAIUS Builder</h1>
+    <p class="text-gray-400 text-center">Describe what you want to build and I'll create it for you!</p>
+  </div>
+</body>
+</html>`,
+    "style.css": `/* Custom styles */
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.container {
+  max-width: 1200px;
+}`,
+    "script.js": `// Your JavaScript code
+console.log('App loaded!');
+
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('DOM ready');
+});`
+  });
+  const [activeFile, setActiveFile] = useState("index.html");
   const [loading, setLoading] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [chatHistory, setChatHistory] = useState([]);
   const nav = useNavigate();
 
   const handleGenerate = async () => {
     if (!prompt.trim() || loading) return;
     setLoading(true);
+    
+    // Add user message to chat
+    setChatHistory(prev => [...prev, { role: "user", content: prompt }]);
+    
     try {
-      const res = await api.post("/build/generate", { prompt, current_code: code });
-      setCode(res.data.code);
+      const res = await api.post("/build/generate-full", { 
+        prompt, 
+        current_files: files,
+        project_type: "web"
+      });
+      
+      if (res.data.files) {
+        setFiles(prev => ({ ...prev, ...res.data.files }));
+      }
+      
+      // Add assistant response to chat
+      setChatHistory(prev => [...prev, { 
+        role: "assistant", 
+        content: res.data.message || "I've updated your code. Check the preview!"
+      }]);
+      
       toast.success("Code generated!");
     } catch (error) {
-      toast.error("Generation failed");
+      setChatHistory(prev => [...prev, { 
+        role: "assistant", 
+        content: "Sorry, I encountered an error. Please try again."
+      }]);
+      toast.error("Generation failed - trying simpler approach");
+      
+      // Fallback to simple generation
+      try {
+        const fallbackRes = await api.post("/build/generate", { prompt, current_code: files["index.html"] });
+        if (fallbackRes.data.code) {
+          setFiles(prev => ({ ...prev, "index.html": fallbackRes.data.code }));
+          setChatHistory(prev => [...prev, { 
+            role: "assistant", 
+            content: "I've updated your HTML. Check the preview!"
+          }]);
+        }
+      } catch (e) {
+        console.error(e);
+      }
     } finally {
       setLoading(false);
       setPrompt("");
@@ -337,7 +405,7 @@ const BuildPage = ({ showSidebar = false, navigate, user, showAuth, showPro, sho
     if (!projectName.trim()) return;
     try {
       const res = await api.post("/projects", { name: projectName, description: "Created from Build", type: "web" });
-      await api.put(`/projects/${res.data.id}/files`, { "index.jsx": code });
+      await api.put(`/projects/${res.data.id}/files`, files);
       toast.success("Saved to project!");
       setShowSaveDialog(false);
       (navigate || nav)("/projects");
@@ -346,8 +414,60 @@ const BuildPage = ({ showSidebar = false, navigate, user, showAuth, showPro, sho
     }
   };
 
+  const downloadFiles = () => {
+    // Create a zip-like download of all files
+    Object.entries(files).forEach(([filename, content]) => {
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+    toast.success("Files downloaded!");
+  };
+
+  const addNewFile = () => {
+    const filename = window.prompt("Enter filename (e.g., component.js):");
+    if (filename && !files[filename]) {
+      setFiles(prev => ({ ...prev, [filename]: `// ${filename}\n` }));
+      setActiveFile(filename);
+    }
+  };
+
+  const deleteFile = (filename) => {
+    if (Object.keys(files).length <= 1) {
+      toast.error("Cannot delete the last file");
+      return;
+    }
+    const newFiles = { ...files };
+    delete newFiles[filename];
+    setFiles(newFiles);
+    if (activeFile === filename) {
+      setActiveFile(Object.keys(newFiles)[0]);
+    }
+  };
+
+  // Generate preview HTML
+  const getPreviewContent = () => {
+    let html = files["index.html"] || "";
+    
+    // Inject CSS if exists
+    if (files["style.css"]) {
+      html = html.replace("</head>", `<style>${files["style.css"]}</style></head>`);
+    }
+    
+    // Inject JS if exists
+    if (files["script.js"]) {
+      html = html.replace("</body>", `<script>${files["script.js"]}</script></body>`);
+    }
+    
+    return html;
+  };
+
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-[#0a0a0a]">
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
         <DialogContent className="glass border-white/10">
           <DialogHeader><DialogTitle>Save to Project</DialogTitle></DialogHeader>
@@ -356,54 +476,128 @@ const BuildPage = ({ showSidebar = false, navigate, user, showAuth, showPro, sho
         </DialogContent>
       </Dialog>
       
-      {/* Header with Back Button */}
-      <div className="h-14 border-b border-white/10 flex items-center justify-between px-4 glass">
+      {/* Header */}
+      <div className="h-12 border-b border-white/10 flex items-center justify-between px-4 bg-[#111]">
         <div className="flex items-center gap-3">
-          <Button size="sm" variant="ghost" onClick={() => (navigate || nav)("/")} className="h-8">
-            <X className="w-4 h-4 mr-1" /> Back to Dashboard
+          <Button size="sm" variant="ghost" onClick={() => (navigate || nav)("/")} className="h-7 text-xs">
+            <X className="w-3 h-3 mr-1" /> Exit
           </Button>
-          <h2 className="font-secondary text-lg font-bold flex items-center gap-2">
-            <Hammer className="w-5 h-5 text-primary" /> GAAIUS AI Builder
+          <div className="h-4 w-px bg-white/20" />
+          <h2 className="font-secondary text-sm font-bold flex items-center gap-2">
+            <Hammer className="w-4 h-4 text-primary" /> GAAIUS Builder
           </h2>
         </div>
-        <Button size="sm" onClick={() => setShowSaveDialog(true)} variant="outline" className="h-8">
-          <Save className="w-4 h-4 mr-1" /> Save to Project
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={downloadFiles} variant="outline" className="h-7 text-xs">
+            <Download className="w-3 h-3 mr-1" /> Download
+          </Button>
+          <Button size="sm" onClick={() => setShowSaveDialog(true)} variant="default" className="h-7 text-xs bg-primary">
+            <Save className="w-3 h-3 mr-1" /> Save
+          </Button>
+        </div>
       </div>
       
-      <div className="flex-1 flex">
-        {/* Left: Code Editor */}
-        <div className="w-1/2 border-r border-white/10 flex flex-col">
-          <div className="flex-1 p-4">
-            <div className="glass-light rounded-xl p-4 h-full flex flex-col">
-              <pre className="flex-1 text-xs overflow-auto">{code}</pre>
-            </div>
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left: Chat Panel */}
+        <div className="w-80 border-r border-white/10 flex flex-col bg-[#0d0d0d]">
+          <div className="p-3 border-b border-white/10">
+            <p className="text-xs text-muted-foreground uppercase font-mono">AI Assistant</p>
           </div>
-          <div className="p-4 border-t border-white/10">
+          
+          <ScrollArea className="flex-1 p-3">
+            {chatHistory.length === 0 ? (
+              <div className="text-center py-8">
+                <Sparkles className="w-8 h-8 text-primary mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">Tell me what you want to build!</p>
+                <p className="text-xs text-muted-foreground mt-2">Examples:</p>
+                <div className="space-y-1 mt-2">
+                  <p className="text-xs text-primary/70">"Build a landing page for a startup"</p>
+                  <p className="text-xs text-primary/70">"Create a todo app with local storage"</p>
+                  <p className="text-xs text-primary/70">"Make a portfolio website"</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {chatHistory.map((msg, i) => (
+                  <div key={i} className={`p-2 rounded-lg text-sm ${msg.role === "user" ? "bg-primary/20 ml-4" : "bg-white/5 mr-4"}`}>
+                    {msg.content}
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+          
+          <div className="p-3 border-t border-white/10">
             <div className="flex gap-2">
               <Input
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Describe what you want to build..."
-                className="flex-1 bg-white/5 border-white/10"
+                placeholder="Describe what to build..."
+                className="flex-1 bg-white/5 border-white/10 text-sm h-9"
                 onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
               />
-              <Button onClick={handleGenerate} disabled={loading} className="bg-primary">
+              <Button onClick={handleGenerate} disabled={loading} size="sm" className="bg-primary h-9">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               </Button>
             </div>
           </div>
         </div>
         
-        {/* Right: Preview */}
-        <div className="w-1/2 flex flex-col">
-          <div className="p-4 border-b border-white/10">
-            <h2 className="font-secondary text-lg font-bold flex items-center gap-2">
-              <Eye className="w-5 h-5 text-cyan-400" /> Preview
-            </h2>
+        {/* Middle: Code Editor */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* File Tabs */}
+          <div className="h-9 border-b border-white/10 flex items-center px-2 bg-[#111] overflow-x-auto">
+            {Object.keys(files).map(filename => (
+              <div 
+                key={filename}
+                className={`flex items-center gap-1 px-3 py-1 text-xs cursor-pointer border-r border-white/10 ${activeFile === filename ? "bg-[#1a1a1a] text-white" : "text-muted-foreground hover:text-white"}`}
+                onClick={() => setActiveFile(filename)}
+              >
+                <FileCode className="w-3 h-3" />
+                {filename}
+                {Object.keys(files).length > 1 && (
+                  <button onClick={(e) => { e.stopPropagation(); deleteFile(filename); }} className="ml-1 hover:text-red-400">
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            ))}
+            <button onClick={addNewFile} className="px-2 py-1 text-xs text-muted-foreground hover:text-white">
+              <Plus className="w-3 h-3" />
+            </button>
           </div>
-          <div className="flex-1 p-4 bg-white text-black overflow-auto">
-            <div dangerouslySetInnerHTML={{ __html: code.replace(/className=/g, 'class=') }} />
+          
+          {/* Code Editor */}
+          <div className="flex-1 overflow-auto bg-[#0d0d0d]">
+            <textarea
+              value={files[activeFile] || ""}
+              onChange={(e) => setFiles(prev => ({ ...prev, [activeFile]: e.target.value }))}
+              className="w-full h-full p-4 bg-transparent text-sm font-mono text-green-400 resize-none outline-none"
+              spellCheck="false"
+            />
+          </div>
+        </div>
+        
+        {/* Right: Preview */}
+        <div className="w-1/3 border-l border-white/10 flex flex-col min-w-[300px]">
+          <div className="h-9 border-b border-white/10 flex items-center justify-between px-3 bg-[#111]">
+            <div className="flex items-center gap-2">
+              <Eye className="w-3 h-3 text-cyan-400" />
+              <span className="text-xs font-mono">Preview</span>
+            </div>
+            <div className="flex gap-1">
+              <div className="w-2 h-2 rounded-full bg-red-500" />
+              <div className="w-2 h-2 rounded-full bg-yellow-500" />
+              <div className="w-2 h-2 rounded-full bg-green-500" />
+            </div>
+          </div>
+          <div className="flex-1 bg-white overflow-auto">
+            <iframe
+              srcDoc={getPreviewContent()}
+              className="w-full h-full border-0"
+              title="Preview"
+              sandbox="allow-scripts allow-same-origin"
+            />
           </div>
         </div>
       </div>
