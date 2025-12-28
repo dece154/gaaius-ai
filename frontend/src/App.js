@@ -424,14 +424,22 @@ const ProjectsPage = () => {
   }, [user]);
 
   const createProject = async () => {
-    if (!newName.trim()) return;
+    if (!newName.trim()) {
+      toast.error("Please enter a project name");
+      return;
+    }
     try {
-      const res = await api.post("/projects", { name: newName });
-      setProjects(prev => [res.data, ...prev]);
-      setNewName("");
-      toast.success("Project created!");
+      const res = await api.post("/projects", { name: newName, description: "", type: "web" });
+      if (res.data && res.data.id) {
+        setProjects(prev => [res.data, ...prev]);
+        setNewName("");
+        toast.success("Project created!");
+      } else {
+        throw new Error("Invalid response");
+      }
     } catch (error) {
-      toast.error("Failed to create project");
+      console.error("Project creation error:", error);
+      toast.error(error.response?.data?.detail || "Failed to create project");
     }
   };
 
