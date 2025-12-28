@@ -990,7 +990,12 @@ const Sidebar = ({ mode, setMode, sessions, currentSession, setCurrentSession, s
         <ScrollArea className="flex-1 px-4">
           {sessions.map(session => (
             <div key={session.id} className={`group flex items-center gap-3 p-3 rounded-xl mb-2 cursor-pointer transition-all ${currentSession?.id === session.id ? "bg-primary/20 border border-primary/30" : "hover:bg-white/5"}`}
-              onClick={() => { setCurrentSession(session); setSidebarOpen(false); }} data-testid={`session-${session.id}`}>
+              onClick={() => { 
+                setCurrentSession(session); 
+                setSidebarOpen(false);
+                setMode("chat");
+                navigate("/");
+              }} data-testid={`session-${session.id}`}>
               <MessageSquare className="w-4 h-4 text-muted-foreground flex-shrink-0" />
               <span className="flex-1 truncate text-sm">{session.name}</span>
               <button onClick={(e) => { e.stopPropagation(); deleteSession(session.id); }} className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 rounded flex-shrink-0" data-testid={`delete-session-${session.id}`}>
