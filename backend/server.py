@@ -705,7 +705,7 @@ async def generate_audio(request: AudioGenerationRequest, user = Depends(get_cur
         
     except Exception as e:
         logger.error(f"Audio generation error: {e}")
-        raise HTTPException(status_code=500, detail=f"Audio generation failed: {str(e)}"}
+        raise HTTPException(status_code=500, detail=f"Audio generation failed: {str(e)}")
 
 # ============== FILE GENERATION ==============
 
