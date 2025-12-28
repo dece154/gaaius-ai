@@ -1016,6 +1016,19 @@ const MainApp = () => {
     );
   }
 
+  if (location.pathname === "/documents") {
+    return (
+      <>
+        <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
+        <ProfileModal open={showProfile} onClose={() => setShowProfile(false)} />
+        <div className="h-screen bg-[#050505]">
+          <Toaster position="top-center" theme="dark" />
+          <DocumentStudio onBack={() => navigate("/")} />
+        </div>
+      </>
+    );
+  }
+
   // Auto-name session based on first message
   const autoNameSession = async (sessionId, message) => {
     const name = message.slice(0, 30) + (message.length > 30 ? "..." : "");
