@@ -594,7 +594,7 @@ async def speech_to_text(audio: UploadFile = File(...), user = Depends(get_curre
 
 @api_router.post("/audio/generate")
 async def generate_audio(request: AudioGenerationRequest, user = Depends(get_current_user)):
-    """Generate audio content - spoken word, descriptions, or ambient sounds"""
+    """Generate audio narration - reads whatever you type in different voices and languages"""
     try:
         from gtts import gTTS
         
@@ -603,43 +603,75 @@ async def generate_audio(request: AudioGenerationRequest, user = Depends(get_cur
         audio_path = ROOT_DIR / "static" / "audio" / audio_filename
         (ROOT_DIR / "static" / "audio").mkdir(parents=True, exist_ok=True)
         
-        # Use Groq to generate descriptive content for the audio
-        audio_types = {
-            "music": "You are a music describer. Create a vivid, poetic 2-3 sentence description of what this music sounds like, as if describing it to someone who cannot hear it. Make it evocative and beautiful.",
-            "sfx": "You are a sound effect describer. Create a vivid 2-3 sentence description of this sound effect, as if narrating it for an audiobook.",
-            "ambient": "You are an ambient sound describer. Create a calming, immersive 2-3 sentence description of this ambient soundscape.",
-            "narration": "You are a narrator. Create engaging narration based on this prompt. Keep it to 2-3 sentences.",
-            "podcast": "You are a podcast host. Create an engaging introduction or segment based on this topic. Keep it to 3-4 sentences."
-        }
+        # Detect language hints in prompt
+        prompt_lower = request.prompt.lower()
+        lang = 'en'  # Default English
         
-        system_prompt = audio_types.get(request.type, audio_types["narration"])
+        # Language detection based on keywords
+        if any(word in prompt_lower for word in ['spanish', 'español', 'espanol']):
+            lang = 'es'
+        elif any(word in prompt_lower for word in ['french', 'français', 'francais']):
+            lang = 'fr'
+        elif any(word in prompt_lower for word in ['german', 'deutsch']):
+            lang = 'de'
+        elif any(word in prompt_lower for word in ['italian', 'italiano']):
+            lang = 'it'
+        elif any(word in prompt_lower for word in ['portuguese', 'português']):
+            lang = 'pt'
+        elif any(word in prompt_lower for word in ['chinese', '中文']):
+            lang = 'zh-CN'
+        elif any(word in prompt_lower for word in ['japanese', '日本語']):
+            lang = 'ja'
+        elif any(word in prompt_lower for word in ['korean', '한국어']):
+            lang = 'ko'
+        elif any(word in prompt_lower for word in ['russian', 'русский']):
+            lang = 'ru'
+        elif any(word in prompt_lower for word in ['arabic', 'عربي']):
+            lang = 'ar'
+        elif any(word in prompt_lower for word in ['hindi', 'हिंदी']):
+            lang = 'hi'
         
-        # Generate the text content using Groq
-        completion = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": request.prompt}
-            ],
-            temperature=0.8,
-            max_tokens=300
-        )
+        # Clean the prompt - remove language instructions for cleaner narration
+        text_to_narrate = request.prompt
+        for remove_word in ['in spanish', 'in french', 'in german', 'in italian', 'in portuguese', 
+                           'in chinese', 'in japanese', 'in korean', 'in russian', 'in arabic', 'in hindi',
+                           'spanish:', 'french:', 'german:', 'narrate:', 'say:', 'read:']:
+            text_to_narrate = text_to_narrate.lower().replace(remove_word, '').strip()
         
-        text_content = completion.choices[0].message.content
+        # If the text is very short, just narrate it directly
+        # Otherwise, use AI to expand it into proper narration
+        if len(text_to_narrate) < 50:
+            narration_text = text_to_narrate
+        else:
+            # Use Groq to create a natural narration
+            completion = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": "You are a professional narrator. Simply narrate the given text in a clear, engaging way. Do not add music descriptions or sound effects. Just read/narrate the content naturally. Keep it concise."},
+                    {"role": "user", "content": f"Narrate this: {text_to_narrate}"}
+                ],
+                temperature=0.5,
+                max_tokens=500
+            )
+            narration_text = completion.choices[0].message.content
         
-        # Convert to speech using gTTS (free, no limits)
-        tts = gTTS(text=text_content, lang='en', slow=False)
+        # Convert to speech using gTTS
+        tts = gTTS(text=narration_text, lang=lang, slow=False)
         tts.save(str(audio_path))
         
         audio_url = f"/api/static/audio/{audio_filename}"
         timestamp = datetime.now(timezone.utc).isoformat()
         
+        lang_names = {'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 
+                     'it': 'Italian', 'pt': 'Portuguese', 'zh-CN': 'Chinese', 'ja': 'Japanese',
+                     'ko': 'Korean', 'ru': 'Russian', 'ar': 'Arabic', 'hi': 'Hindi'}
+        
         await db.generations.insert_one({
             "id": gen_id, "type": "audio", "prompt": request.prompt, "url": audio_url,
-            "content": text_content, "audio_type": request.type, "timestamp": timestamp
+            "content": narration_text, "language": lang_names.get(lang, 'English'), "timestamp": timestamp
         })
         
-        return {"id": gen_id, "audio_url": audio_url, "content": text_content, "timestamp": timestamp}
+        return {"id": gen_id, "audio_url": audio_url, "content": narration_text, "language": lang_names.get(lang, 'English'), "timestamp": timestamp}
         
     except Exception as e:
         logger.error(f"Audio generation error: {e}")
