@@ -611,6 +611,266 @@ const ProjectsPage = () => {
   );
 };
 
+// GAAIUS AI Document Studio - AI-First Document Creation & Editing Platform
+const DocumentStudio = ({ onBack }) => {
+  const [prompt, setPrompt] = useState("");
+  const [documentContent, setDocumentContent] = useState("");
+  const [documentType, setDocumentType] = useState("pdf");
+  const [documentName, setDocumentName] = useState("Untitled Document");
+  const [loading, setLoading] = useState(false);
+  const [chatHistory, setChatHistory] = useState([]);
+  const [activeTab, setActiveTab] = useState("create");
+  const [generatedFiles, setGeneratedFiles] = useState([]);
+  const { user } = useAuthStore();
+
+  const documentTypes = [
+    { id: "pdf", label: "PDF Document", icon: "📄" },
+    { id: "docx", label: "Word Document", icon: "📝" },
+    { id: "xlsx", label: "Excel Spreadsheet", icon: "📊" },
+    { id: "invoice", label: "Invoice", icon: "🧾" },
+    { id: "contract", label: "Contract/Agreement", icon: "⚖️" },
+    { id: "proposal", label: "Business Proposal", icon: "💼" },
+    { id: "resume", label: "CV/Resume", icon: "👤" },
+    { id: "letter", label: "Letter", icon: "✉️" },
+    { id: "report", label: "Report", icon: "📋" },
+    { id: "presentation", label: "Presentation", icon: "📽️" }
+  ];
+
+  const handleGenerate = async () => {
+    if (!prompt.trim() || loading) return;
+    setLoading(true);
+    setChatHistory(prev => [...prev, { role: "user", content: prompt }]);
+    
+    try {
+      // Call document generation API
+      const res = await api.post("/document/generate", { 
+        prompt, 
+        document_type: documentType,
+        current_content: documentContent,
+        document_name: documentName
+      });
+      
+      if (res.data.content) {
+        setDocumentContent(res.data.content);
+      }
+      if (res.data.file_url) {
+        setGeneratedFiles(prev => [{ 
+          name: res.data.filename || `${documentName}.${documentType}`,
+          url: res.data.file_url,
+          type: documentType,
+          timestamp: new Date().toISOString()
+        }, ...prev]);
+      }
+      
+      setChatHistory(prev => [...prev, { 
+        role: "assistant", 
+        content: res.data.message || "Document created! You can preview and download it."
+      }]);
+      toast.success("Document generated!");
+    } catch (error) {
+      // Fallback to file generation endpoint
+      try {
+        const fallbackRes = await api.post("/file/generate", { prompt, file_type: documentType === "xlsx" ? "data" : "document" });
+        if (fallbackRes.data) {
+          setDocumentContent(fallbackRes.data.content || "");
+          if (fallbackRes.data.file_url) {
+            setGeneratedFiles(prev => [{ 
+              name: `${documentName}.${documentType === "xlsx" ? "csv" : "md"}`,
+              url: fallbackRes.data.file_url,
+              type: documentType,
+              timestamp: new Date().toISOString()
+            }, ...prev]);
+          }
+          setChatHistory(prev => [...prev, { 
+            role: "assistant", 
+            content: "I've created your document. Check the preview!"
+          }]);
+        }
+      } catch (e) {
+        setChatHistory(prev => [...prev, { role: "assistant", content: "Error generating document. Please try again." }]);
+        toast.error("Generation failed");
+      }
+    } finally {
+      setLoading(false);
+      setPrompt("");
+    }
+  };
+
+  const downloadDocument = (file) => {
+    if (file.url) {
+      window.open(`${BACKEND_URL}${file.url}`, '_blank');
+    } else {
+      const blob = new Blob([documentContent], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name || `${documentName}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    toast.success("Download started!");
+  };
+
+  return (
+    <div className="h-full flex flex-col bg-gradient-to-br from-[#0a0a0a] via-[#0f0f1a] to-[#0a0a0a]">
+      {/* Header */}
+      <div className="h-14 border-b border-white/10 flex items-center justify-between px-4 bg-[#0d0d0d]/80 backdrop-blur-xl">
+        <div className="flex items-center gap-4">
+          <Button size="sm" variant="ghost" onClick={onBack} className="h-8">
+            <X className="w-4 h-4 mr-1" /> Back
+          </Button>
+          <div className="h-6 w-px bg-white/20" />
+          <h2 className="font-secondary text-base font-bold flex items-center gap-2">
+            <FileCode className="w-5 h-5 text-cyan-400" /> GAAIUS AI Document Studio
+          </h2>
+        </div>
+        <div className="flex items-center gap-2">
+          <Input 
+            value={documentName} 
+            onChange={(e) => setDocumentName(e.target.value)}
+            className="w-48 h-8 text-sm bg-white/5 border-white/10"
+            placeholder="Document name..."
+          />
+        </div>
+      </div>
+      
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Sidebar - Document Types & History */}
+        <div className="w-64 border-r border-white/10 flex flex-col bg-[#0d0d0d]">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+            <TabsList className="w-full grid grid-cols-2 m-2 bg-white/5">
+              <TabsTrigger value="create" className="text-xs">Create</TabsTrigger>
+              <TabsTrigger value="history" className="text-xs">Files</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="create" className="flex-1 p-3 space-y-2 overflow-auto">
+              <p className="text-xs text-muted-foreground uppercase font-mono mb-2">Document Type</p>
+              {documentTypes.map(dt => (
+                <button
+                  key={dt.id}
+                  onClick={() => setDocumentType(dt.id)}
+                  className={`w-full flex items-center gap-2 p-2 rounded-lg text-sm transition ${documentType === dt.id ? "bg-primary/20 border border-primary/40" : "hover:bg-white/5"}`}
+                >
+                  <span>{dt.icon}</span>
+                  <span>{dt.label}</span>
+                </button>
+              ))}
+            </TabsContent>
+            
+            <TabsContent value="history" className="flex-1 p-3 overflow-auto">
+              <p className="text-xs text-muted-foreground uppercase font-mono mb-2">Generated Files</p>
+              {generatedFiles.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-4">No files yet</p>
+              ) : (
+                <div className="space-y-2">
+                  {generatedFiles.map((file, i) => (
+                    <div key={i} className="glass-light rounded-lg p-2 text-xs">
+                      <p className="font-medium truncate">{file.name}</p>
+                      <p className="text-muted-foreground">{new Date(file.timestamp).toLocaleTimeString()}</p>
+                      <Button size="sm" variant="ghost" onClick={() => downloadDocument(file)} className="w-full mt-1 h-6 text-xs">
+                        <Download className="w-3 h-3 mr-1" /> Download
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
+        
+        {/* Middle - AI Chat */}
+        <div className="w-96 border-r border-white/10 flex flex-col bg-[#0a0a0a]">
+          <div className="p-4 border-b border-white/10">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              <span className="font-semibold">AI Document Assistant</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Tell me what document to create or edit</p>
+          </div>
+          
+          <ScrollArea className="flex-1 p-4">
+            {chatHistory.length === 0 ? (
+              <div className="text-center py-8">
+                <FileCode className="w-12 h-12 text-cyan-400/50 mx-auto mb-4" />
+                <p className="text-sm text-muted-foreground mb-4">What document would you like to create?</p>
+                <div className="space-y-2 text-xs text-left">
+                  <p className="text-primary/70 cursor-pointer hover:text-primary p-2 rounded hover:bg-white/5" onClick={() => setPrompt("Create a professional invoice for web development services, $5000, due in 30 days")}>
+                    💡 "Create a professional invoice for $5000"
+                  </p>
+                  <p className="text-primary/70 cursor-pointer hover:text-primary p-2 rounded hover:bg-white/5" onClick={() => setPrompt("Write a business proposal for a mobile app development project")}>
+                    💡 "Write a business proposal for an app"
+                  </p>
+                  <p className="text-primary/70 cursor-pointer hover:text-primary p-2 rounded hover:bg-white/5" onClick={() => setPrompt("Create a service agreement contract for software consulting")}>
+                    💡 "Create a service agreement contract"
+                  </p>
+                  <p className="text-primary/70 cursor-pointer hover:text-primary p-2 rounded hover:bg-white/5" onClick={() => setPrompt("Generate an Excel budget spreadsheet for a startup")}>
+                    💡 "Generate a budget spreadsheet"
+                  </p>
+                  <p className="text-primary/70 cursor-pointer hover:text-primary p-2 rounded hover:bg-white/5" onClick={() => setPrompt("Create a modern CV/resume for a software developer")}>
+                    💡 "Create a CV/resume"
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {chatHistory.map((msg, i) => (
+                  <div key={i} className={`p-3 rounded-xl text-sm ${msg.role === "user" ? "bg-primary/20 ml-4" : "bg-white/5 mr-4"}`}>
+                    <p className="text-xs text-muted-foreground mb-1">{msg.role === "user" ? "You" : "GAAIUS AI"}</p>
+                    {msg.content}
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+          
+          <div className="p-4 border-t border-white/10">
+            <div className="flex gap-2">
+              <Input
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Describe the document..."
+                className="flex-1 bg-white/5 border-white/10"
+                onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
+              />
+              <Button onClick={handleGenerate} disabled={loading} className="bg-cyan-600 hover:bg-cyan-700">
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              </Button>
+            </div>
+          </div>
+        </div>
+        
+        {/* Right - Document Preview */}
+        <div className="flex-1 flex flex-col bg-[#111]">
+          <div className="h-10 border-b border-white/10 flex items-center justify-between px-4">
+            <div className="flex items-center gap-2">
+              <Eye className="w-4 h-4 text-cyan-400" />
+              <span className="text-sm font-mono">Document Preview</span>
+            </div>
+            {documentContent && (
+              <Button size="sm" variant="outline" onClick={() => downloadDocument({ name: `${documentName}.txt` })} className="h-7 text-xs">
+                <Download className="w-3 h-3 mr-1" /> Export
+              </Button>
+            )}
+          </div>
+          <div className="flex-1 overflow-auto p-6 bg-white">
+            {documentContent ? (
+              <div className="max-w-3xl mx-auto text-black prose prose-sm">
+                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{documentContent}</pre>
+              </div>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                <FileCode className="w-16 h-16 mb-4 opacity-30" />
+                <p className="text-lg">Your document will appear here</p>
+                <p className="text-sm">Tell the AI what to create using the chat</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Main App Component
 const MainApp = () => {
   // Persist mode in localStorage
