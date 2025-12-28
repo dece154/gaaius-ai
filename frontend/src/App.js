@@ -1219,9 +1219,17 @@ const MainApp = () => {
               )}
               
               {mode === "file" && (
-                <Button size="sm" onClick={() => navigate("/documents")} variant="outline" className="h-8 text-xs bg-cyan-600/20 border-cyan-500/30 text-cyan-400">
-                  <FileCode className="w-4 h-4 mr-1" /> Open Document Studio
-                </Button>
+                <Select value={fileType} onValueChange={setFileType}>
+                  <SelectTrigger className="w-28 h-8 bg-white/5 border-white/10 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="code">Code</SelectItem>
+                    <SelectItem value="document">Document</SelectItem>
+                    <SelectItem value="data">JSON/CSV</SelectItem>
+                    <SelectItem value="config">Config</SelectItem>
+                  </SelectContent>
+                </Select>
               )}
               
               {/* New Chat button at top right */}
