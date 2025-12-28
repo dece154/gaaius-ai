@@ -862,6 +862,258 @@ async def generate_file(request: FileGenerationRequest, user = Depends(get_curre
         logger.error(f"File generation error: {e}")
         raise HTTPException(status_code=500, detail=f"File generation failed: {str(e)}")
 
+# ============== DOCUMENT STUDIO ==============
+
+@api_router.post("/document/generate")
+async def generate_document(data: dict, user = Depends(get_current_user)):
+    """GAAIUS AI Document Studio - Generate professional documents"""
+    try:
+        prompt = data.get("prompt", "")
+        doc_type = data.get("document_type", "pdf")
+        current_content = data.get("current_content", "")
+        doc_name = data.get("document_name", "document")
+        
+        # Document type specific prompts
+        doc_prompts = {
+            "invoice": """You are a professional invoice generator. Create a detailed, professional invoice with:
+- Company/Sender information (placeholder for user to fill)
+- Client/Bill To information
+- Invoice number and date
+- Itemized list with descriptions, quantities, rates, amounts
+- Subtotal, Tax (if applicable), Total
+- Payment terms and bank details
+- Professional formatting with clear sections""",
+            
+            "contract": """You are a legal document writer. Create a comprehensive contract/agreement with:
+- Party information sections
+- Detailed terms and conditions
+- Scope of work/services
+- Payment terms
+- Duration and termination clauses
+- Confidentiality clause
+- Dispute resolution
+- Signature blocks
+Use professional legal language.""",
+            
+            "proposal": """You are a business proposal writer. Create a compelling business proposal with:
+- Executive Summary
+- Problem Statement
+- Proposed Solution
+- Methodology/Approach
+- Timeline and Milestones
+- Team/Qualifications
+- Pricing/Investment
+- Terms and Conditions
+- Call to Action
+Use persuasive, professional language.""",
+            
+            "resume": """You are a professional CV/resume writer. Create a modern, ATS-friendly resume with:
+- Contact Information
+- Professional Summary
+- Skills section
+- Work Experience (reverse chronological)
+- Education
+- Certifications/Awards
+Use action verbs and quantifiable achievements.""",
+            
+            "report": """You are a professional report writer. Create a detailed report with:
+- Executive Summary
+- Introduction
+- Methodology
+- Findings/Results
+- Analysis
+- Conclusions
+- Recommendations
+- References
+Use clear headings and professional formatting.""",
+            
+            "letter": """You are a professional letter writer. Create a well-formatted business letter with:
+- Date
+- Recipient information
+- Subject line
+- Salutation
+- Body paragraphs
+- Closing
+- Signature block
+Use appropriate formal tone.""",
+            
+            "xlsx": """You are a spreadsheet/data expert. Create structured data that works well in Excel:
+- Use comma-separated values
+- Include clear headers in first row
+- Use proper data types (numbers, dates, text)
+- Include calculations/formulas descriptions
+- Organize data logically""",
+            
+            "default": """You are a professional document writer. Create well-structured content with:
+- Clear headings using markdown (# ## ###)
+- Organized sections
+- Professional language
+- Proper formatting"""
+        }
+        
+        system_prompt = doc_prompts.get(doc_type, doc_prompts["default"])
+        
+        # If editing existing content
+        user_prompt = prompt
+        if current_content:
+            user_prompt = f"Current document content:\n{current_content[:2000]}\n\nUser request: {prompt}\n\nModify the document according to the request."
+        
+        completion = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.4,
+            max_tokens=6000
+        )
+        
+        content = completion.choices[0].message.content
+        
+        # Clean markdown code blocks
+        if "```" in content:
+            import re
+            code_match = re.search(r'```[\w]*\n?([\s\S]*?)```', content)
+            if code_match:
+                content = code_match.group(1).strip()
+        
+        gen_id = str(uuid.uuid4())
+        
+        # Determine file extension
+        ext_map = {
+            "pdf": "pdf", "docx": "docx", "xlsx": "xlsx",
+            "invoice": "pdf", "contract": "pdf", "proposal": "pdf",
+            "resume": "pdf", "report": "pdf", "letter": "pdf",
+            "presentation": "md"
+        }
+        ext = ext_map.get(doc_type, "md")
+        
+        file_filename = f"{gen_id}.{ext}"
+        file_path = ROOT_DIR / "static" / "files" / file_filename
+        (ROOT_DIR / "static" / "files").mkdir(parents=True, exist_ok=True)
+        
+        # Generate file based on type
+        if ext == "pdf":
+            try:
+                from reportlab.lib.pagesizes import letter, A4
+                from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+                from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+                from reportlab.lib import colors
+                from reportlab.lib.units import inch
+                
+                doc = SimpleDocTemplate(str(file_path), pagesize=A4, 
+                    leftMargin=0.75*inch, rightMargin=0.75*inch,
+                    topMargin=0.75*inch, bottomMargin=0.75*inch)
+                styles = getSampleStyleSheet()
+                
+                # Custom styles
+                styles.add(ParagraphStyle(name='Title', parent=styles['Heading1'], fontSize=18, spaceAfter=20))
+                styles.add(ParagraphStyle(name='Subtitle', parent=styles['Heading2'], fontSize=14, spaceAfter=12))
+                
+                story = []
+                
+                for line in content.split('\n'):
+                    line = line.strip()
+                    if not line:
+                        story.append(Spacer(1, 6))
+                    elif line.startswith('# '):
+                        story.append(Paragraph(line[2:], styles['Title']))
+                    elif line.startswith('## '):
+                        story.append(Paragraph(line[3:], styles['Subtitle']))
+                    elif line.startswith('### '):
+                        story.append(Paragraph(line[4:], styles['Heading3']))
+                    elif line.startswith('- ') or line.startswith('* '):
+                        story.append(Paragraph(f"• {line[2:]}", styles['Normal']))
+                    elif line.startswith(tuple('0123456789')):
+                        story.append(Paragraph(line, styles['Normal']))
+                    else:
+                        story.append(Paragraph(line, styles['Normal']))
+                    story.append(Spacer(1, 4))
+                
+                doc.build(story)
+            except Exception as pdf_err:
+                logger.error(f"PDF generation error: {pdf_err}")
+                # Fallback to text file
+                ext = "md"
+                file_filename = f"{gen_id}.md"
+                file_path = ROOT_DIR / "static" / "files" / file_filename
+                with open(file_path, "w") as f:
+                    f.write(content)
+                    
+        elif ext == "docx":
+            try:
+                from docx import Document
+                from docx.shared import Pt, Inches
+                
+                doc = Document()
+                for line in content.split('\n'):
+                    if line.startswith('# '):
+                        doc.add_heading(line[2:], level=1)
+                    elif line.startswith('## '):
+                        doc.add_heading(line[3:], level=2)
+                    elif line.startswith('### '):
+                        doc.add_heading(line[4:], level=3)
+                    elif line.strip():
+                        doc.add_paragraph(line)
+                doc.save(str(file_path))
+            except Exception as docx_err:
+                logger.error(f"DOCX generation error: {docx_err}")
+                ext = "md"
+                file_filename = f"{gen_id}.md"
+                file_path = ROOT_DIR / "static" / "files" / file_filename
+                with open(file_path, "w") as f:
+                    f.write(content)
+                    
+        elif ext == "xlsx":
+            try:
+                from openpyxl import Workbook
+                from openpyxl.styles import Font, Alignment
+                
+                wb = Workbook()
+                ws = wb.active
+                ws.title = "Data"
+                
+                for i, line in enumerate(content.split('\n'), 1):
+                    if line.strip():
+                        cells = line.split(',') if ',' in line else line.split('\t') if '\t' in line else [line]
+                        for j, cell in enumerate(cells, 1):
+                            ws.cell(row=i, column=j, value=cell.strip())
+                            if i == 1:  # Header row
+                                ws.cell(row=i, column=j).font = Font(bold=True)
+                wb.save(str(file_path))
+            except Exception as xlsx_err:
+                logger.error(f"XLSX generation error: {xlsx_err}")
+                ext = "csv"
+                file_filename = f"{gen_id}.csv"
+                file_path = ROOT_DIR / "static" / "files" / file_filename
+                with open(file_path, "w") as f:
+                    f.write(content)
+        else:
+            with open(file_path, "w") as f:
+                f.write(content)
+        
+        file_url = f"/api/static/files/{file_filename}"
+        timestamp = datetime.now(timezone.utc).isoformat()
+        
+        await db.generations.insert_one({
+            "id": gen_id, "type": "document", "prompt": prompt, "url": file_url,
+            "document_type": doc_type, "content": content[:1000], "timestamp": timestamp
+        })
+        
+        return {
+            "id": gen_id, 
+            "file_url": file_url, 
+            "filename": f"{doc_name}.{ext}",
+            "content": content,
+            "document_type": doc_type,
+            "message": f"Your {doc_type.upper()} document has been created! You can preview it and download.",
+            "timestamp": timestamp
+        }
+        
+    except Exception as e:
+        logger.error(f"Document generation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Document generation failed: {str(e)}")
+
 # ============== PROJECTS ==============
 
 @api_router.post("/projects")
