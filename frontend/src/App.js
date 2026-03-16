@@ -247,8 +247,9 @@ const ProModal = ({ open, onClose }) => {
   );
 };
 
-// Ad Component - Only shows for logged out users
+// Ad Component - Shows periodically (every 2 hours for 10 seconds) for logged out users
 const AdBanner = ({ onUpgrade }) => {
+  const [visible, setVisible] = useState(false);
   const ads = [
     { text: "🚀 Sign in to unlock all GAAIUS AI features!", cta: "Sign In" },
     { text: "⚡ Create an account for unlimited AI generations!", cta: "Get Started" },
@@ -256,13 +257,46 @@ const AdBanner = ({ onUpgrade }) => {
   ];
   const [ad] = useState(ads[Math.floor(Math.random() * ads.length)]);
 
+  useEffect(() => {
+    // Check last show time
+    const lastShown = localStorage.getItem("gaaius_ad_last_shown");
+    const now = Date.now();
+    const twoHours = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
+    
+    const showAd = () => {
+      setVisible(true);
+      localStorage.setItem("gaaius_ad_last_shown", Date.now().toString());
+      // Hide after 10 seconds
+      setTimeout(() => setVisible(false), 10000);
+    };
+
+    // Show immediately if never shown or more than 2 hours ago
+    if (!lastShown || (now - parseInt(lastShown)) > twoHours) {
+      showAd();
+    }
+
+    // Set interval to show every 2 hours
+    const interval = setInterval(() => {
+      showAd();
+    }, twoHours);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  if (!visible) return null;
+
   return (
-    <div className="w-full p-2 glass border-t border-primary/30">
+    <div className="w-full p-2 glass border-t border-primary/30 animate-in slide-in-from-bottom duration-300">
       <div className="max-w-4xl mx-auto flex items-center justify-between">
         <p className="text-xs">{ad.text}</p>
-        <Button size="sm" onClick={onUpgrade} className="bg-primary hover:bg-primary/90 text-white text-xs px-2 py-1 h-7">
-          {ad.cta}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={onUpgrade} className="bg-primary hover:bg-primary/90 text-white text-xs px-2 py-1 h-7">
+            {ad.cta}
+          </Button>
+          <button onClick={() => setVisible(false)} className="text-muted-foreground hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );
