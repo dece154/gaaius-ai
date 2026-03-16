@@ -305,16 +305,97 @@ const AdBanner = ({ onUpgrade }) => {
 // Chat Message Component - Removed model labels
 const ChatMessage = ({ message, onSpeak }) => {
   const isUser = message.role === "user";
+  const [showLangMenu, setShowLangMenu] = useState(false);
+  
+  const languages = [
+    { code: "en", name: "English" },
+    { code: "es", name: "Spanish" },
+    { code: "fr", name: "French" },
+    { code: "de", name: "German" },
+    { code: "it", name: "Italian" },
+    { code: "pt", name: "Portuguese" },
+    { code: "zh", name: "Chinese" },
+    { code: "ja", name: "Japanese" },
+    { code: "ko", name: "Korean" },
+    { code: "ru", name: "Russian" },
+    { code: "ar", name: "Arabic" },
+    { code: "hi", name: "Hindi" },
+    { code: "af", name: "Afrikaans" },
+    { code: "zu", name: "Zulu" },
+    { code: "sw", name: "Swahili" }
+  ];
+  
+  // Format message with markdown-like styling
+  const formatMessage = (text) => {
+    if (!text) return "";
+    // Handle code blocks
+    let formatted = text.replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre class="bg-black/40 rounded-lg p-3 my-3 overflow-x-auto text-xs font-mono text-green-400"><code>$2</code></pre>');
+    // Handle inline code
+    formatted = formatted.replace(/`([^`]+)`/g, '<code class="bg-black/30 px-1.5 py-0.5 rounded text-sm text-pink-400">$1</code>');
+    // Handle bold
+    formatted = formatted.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-semibold">$1</strong>');
+    // Handle bullet points
+    formatted = formatted.replace(/^[\-\*]\s+(.+)$/gm, '<li class="ml-4 list-disc">$1</li>');
+    // Handle numbered lists
+    formatted = formatted.replace(/^\d+\.\s+(.+)$/gm, '<li class="ml-4 list-decimal">$1</li>');
+    // Wrap lists
+    formatted = formatted.replace(/(<li[^>]*>.*<\/li>\n?)+/g, '<ul class="my-2 space-y-1">$&</ul>');
+    // Handle paragraphs with proper spacing
+    formatted = formatted.replace(/\n\n/g, '</p><p class="mt-3">');
+    formatted = formatted.replace(/\n/g, '<br/>');
+    return formatted;
+  };
+
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-4`} data-testid={`message-${message.id}`}>
-      <div className={`max-w-[80%] ${isUser ? "bg-primary/20 border-primary/30 rounded-br-sm" : "bg-secondary/50 border-white/5 rounded-bl-sm"} border rounded-2xl p-4`}>
-        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-6`} data-testid={`message-${message.id}`}>
+      {!isUser && (
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center mr-3 flex-shrink-0 mt-1">
+          <Sparkles className="w-4 h-4 text-white" />
+        </div>
+      )}
+      <div className={`max-w-[75%] ${isUser 
+        ? "bg-primary text-white rounded-2xl rounded-br-md" 
+        : "bg-secondary/30 border border-white/5 rounded-2xl rounded-bl-md"} p-4`}>
+        {isUser ? (
+          <p className="text-sm leading-relaxed">{message.content}</p>
+        ) : (
+          <div 
+            className="text-sm leading-relaxed prose prose-invert prose-sm max-w-none"
+            dangerouslySetInnerHTML={{ __html: formatMessage(message.content) }}
+          />
+        )}
         {!isUser && (
-          <button onClick={() => onSpeak(message.content)} className="mt-2 p-1.5 rounded-full hover:bg-white/10" data-testid="speak-button">
-            <Volume2 className="w-4 h-4 text-muted-foreground hover:text-white" />
-          </button>
+          <div className="mt-3 pt-2 border-t border-white/10 flex items-center gap-2 relative">
+            <button 
+              onClick={() => setShowLangMenu(!showLangMenu)} 
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-white transition text-xs"
+              data-testid="speak-button"
+            >
+              <Volume2 className="w-3.5 h-3.5" />
+              <span>Speak</span>
+            </button>
+            {showLangMenu && (
+              <div className="absolute bottom-full left-0 mb-2 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl p-2 z-50 max-h-48 overflow-y-auto">
+                <p className="text-xs text-muted-foreground px-2 py-1 mb-1">Select language:</p>
+                {languages.map(lang => (
+                  <button
+                    key={lang.code}
+                    onClick={() => { onSpeak(message.content, lang.code); setShowLangMenu(false); }}
+                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/10 rounded transition"
+                  >
+                    {lang.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
+      {isUser && (
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center ml-3 flex-shrink-0 mt-1">
+          <User className="w-4 h-4 text-white" />
+        </div>
+      )}
     </div>
   );
 };
