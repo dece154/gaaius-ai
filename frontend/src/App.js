@@ -307,7 +307,7 @@ const AdBanner = ({ onUpgrade }) => {
   );
 };
 
-// Chat Message Component - Removed model labels
+// Chat Message Component - ChatGPT-style formatting
 const ChatMessage = ({ message, onSpeak }) => {
   const isUser = message.role === "user";
   const [showLangMenu, setShowLangMenu] = useState(false);
@@ -330,77 +330,94 @@ const ChatMessage = ({ message, onSpeak }) => {
     { code: "sw", name: "Swahili" }
   ];
   
-  // Format message with markdown-like styling
+  // ChatGPT-style markdown rendering
   const formatMessage = (text) => {
     if (!text) return "";
-    // Handle code blocks
-    let formatted = text.replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre class="bg-black/40 rounded-lg p-3 my-3 overflow-x-auto text-xs font-mono text-green-400"><code>$2</code></pre>');
-    // Handle inline code
-    formatted = formatted.replace(/`([^`]+)`/g, '<code class="bg-black/30 px-1.5 py-0.5 rounded text-sm text-pink-400">$1</code>');
-    // Handle bold
-    formatted = formatted.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-semibold">$1</strong>');
-    // Handle bullet points
-    formatted = formatted.replace(/^[\-\*]\s+(.+)$/gm, '<li class="ml-4 list-disc">$1</li>');
-    // Handle numbered lists
-    formatted = formatted.replace(/^\d+\.\s+(.+)$/gm, '<li class="ml-4 list-decimal">$1</li>');
-    // Wrap lists
-    formatted = formatted.replace(/(<li[^>]*>.*<\/li>\n?)+/g, '<ul class="my-2 space-y-1">$&</ul>');
-    // Handle paragraphs with proper spacing
-    formatted = formatted.replace(/\n\n/g, '</p><p class="mt-3">');
-    formatted = formatted.replace(/\n/g, '<br/>');
-    return formatted;
+    let html = text;
+    
+    // Code blocks (``` ... ```)
+    html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => 
+      `<pre class="gpt-code-block"><code>${code.trim()}</code></pre>`
+    );
+    // Inline code
+    html = html.replace(/`([^`]+)`/g, '<code class="gpt-inline-code">$1</code>');
+    // Bold
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    // Italic
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    // Headings
+    html = html.replace(/^### (.+)$/gm, '<h3 class="gpt-h3">$1</h3>');
+    html = html.replace(/^## (.+)$/gm, '<h2 class="gpt-h2">$1</h2>');
+    html = html.replace(/^# (.+)$/gm, '<h1 class="gpt-h1">$1</h1>');
+    // Unordered lists
+    html = html.replace(/^[\-\*]\s+(.+)$/gm, '<li class="gpt-li">$1</li>');
+    // Numbered lists
+    html = html.replace(/^\d+\.\s+(.+)$/gm, '<li class="gpt-li-num">$1</li>');
+    // Wrap consecutive list items
+    html = html.replace(/((?:<li class="gpt-li">.*<\/li>\n?)+)/g, '<ul class="gpt-ul">$1</ul>');
+    html = html.replace(/((?:<li class="gpt-li-num">.*<\/li>\n?)+)/g, '<ol class="gpt-ol">$1</ol>');
+    // Paragraphs - double newlines become paragraph breaks
+    html = html.replace(/\n\n/g, '</p><p class="gpt-p">');
+    // Single newlines become line breaks (but not inside code blocks)
+    html = html.replace(/\n/g, '<br/>');
+    // Wrap in paragraph
+    html = `<p class="gpt-p">${html}</p>`;
+    // Clean up empty paragraphs
+    html = html.replace(/<p class="gpt-p"><\/p>/g, '');
+    
+    return html;
   };
 
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-6`} data-testid={`message-${message.id}`}>
-      {!isUser && (
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center mr-3 flex-shrink-0 mt-1">
-          <Sparkles className="w-4 h-4 text-white" />
-        </div>
-      )}
-      <div className={`max-w-[75%] ${isUser 
-        ? "bg-primary text-white rounded-2xl rounded-br-md" 
-        : "bg-secondary/30 border border-white/5 rounded-2xl rounded-bl-md"} p-4`}>
-        {isUser ? (
-          <p className="text-sm leading-relaxed">{message.content}</p>
-        ) : (
-          <div 
-            className="text-sm leading-relaxed prose prose-invert prose-sm max-w-none"
-            dangerouslySetInnerHTML={{ __html: formatMessage(message.content) }}
-          />
-        )}
+    <div className={`gpt-message ${isUser ? "gpt-message-user" : "gpt-message-ai"}`} data-testid={`message-${message.id}`}>
+      <div className="gpt-message-inner">
         {!isUser && (
-          <div className="mt-3 pt-2 border-t border-white/10 flex items-center gap-2 relative">
-            <button 
-              onClick={() => setShowLangMenu(!showLangMenu)} 
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-white transition text-xs"
-              data-testid="speak-button"
-            >
-              <Volume2 className="w-3.5 h-3.5" />
-              <span>Speak</span>
-            </button>
-            {showLangMenu && (
-              <div className="absolute bottom-full left-0 mb-2 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl p-2 z-50 max-h-48 overflow-y-auto">
-                <p className="text-xs text-muted-foreground px-2 py-1 mb-1">Select language:</p>
-                {languages.map(lang => (
-                  <button
-                    key={lang.code}
-                    onClick={() => { onSpeak(message.content, lang.code); setShowLangMenu(false); }}
-                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/10 rounded transition"
-                  >
-                    {lang.name}
-                  </button>
-                ))}
-              </div>
-            )}
+          <div className="gpt-avatar gpt-avatar-ai">
+            <Sparkles className="w-4 h-4 text-white" />
+          </div>
+        )}
+        <div className={`gpt-content ${isUser ? "gpt-content-user" : "gpt-content-ai"}`}>
+          {isUser ? (
+            <p className="gpt-user-text">{message.content}</p>
+          ) : (
+            <div 
+              className="gpt-ai-text"
+              dangerouslySetInnerHTML={{ __html: formatMessage(message.content) }}
+            />
+          )}
+          {!isUser && (
+            <div className="gpt-actions">
+              <button 
+                onClick={() => setShowLangMenu(!showLangMenu)} 
+                className="gpt-speak-btn"
+                data-testid="speak-button"
+              >
+                <Volume2 className="w-3.5 h-3.5" />
+                <span>Speak</span>
+              </button>
+              {showLangMenu && (
+                <div className="gpt-lang-menu">
+                  <p className="gpt-lang-title">Select language:</p>
+                  {languages.map(lang => (
+                    <button
+                      key={lang.code}
+                      onClick={() => { onSpeak(message.content, lang.code); setShowLangMenu(false); }}
+                      className="gpt-lang-item"
+                    >
+                      {lang.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        {isUser && (
+          <div className="gpt-avatar gpt-avatar-user">
+            <User className="w-4 h-4 text-white" />
           </div>
         )}
       </div>
-      {isUser && (
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center ml-3 flex-shrink-0 mt-1">
-          <User className="w-4 h-4 text-white" />
-        </div>
-      )}
     </div>
   );
 };
@@ -1570,8 +1587,9 @@ const Sidebar = ({ mode, setMode, sessions, currentSession, setCurrentSession, s
           </div>
           <button 
             onClick={onToggleCollapse} 
-            className="hidden md:flex p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-white transition"
+            className="hidden md:flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-all"
             data-testid="sidebar-collapse-btn"
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
           </button>

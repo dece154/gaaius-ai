@@ -562,57 +562,46 @@ async def generate_image(request: ImageGenerationRequest, user = Depends(get_cur
         image_bytes = None
         model_used = "Unknown"
         
-        # Strategy 1: Try Pollinations.ai (fast, free)
-        try:
-            encoded_prompt = urllib.parse.quote(request.prompt)
-            API_URL = f"https://image.pollinations.ai/prompt/{encoded_prompt}?nologo=true&width=1024&height=1024"
-            logger.info(f"Trying Pollinations: {API_URL}")
-            response = req.get(API_URL, timeout=60)
-            if response.status_code == 200 and len(response.content) > 5000:
-                image_bytes = response.content
-                model_used = "Pollinations AI"
-                logger.info("Pollinations succeeded")
-        except Exception as e:
-            logger.warning(f"Pollinations failed: {e}")
+        # Pollinations.ai with retry (3 attempts, increasing timeout)
+        encoded_prompt = urllib.parse.quote(request.prompt)
+        pollinations_urls = [
+            f"https://image.pollinations.ai/prompt/{encoded_prompt}?nologo=true&width=1024&height=1024",
+            f"https://image.pollinations.ai/prompt/{encoded_prompt}?nologo=true",
+            f"https://image.pollinations.ai/prompt/{encoded_prompt}",
+        ]
         
-        # Strategy 2: Fall back to HuggingFace Inference
-        if not image_bytes:
+        for attempt, url in enumerate(pollinations_urls):
             try:
-                logger.info("Trying HuggingFace SDXL...")
-                hf_image = hf_client.text_to_image(
-                    request.prompt, 
-                    model="stabilityai/stable-diffusion-xl-base-1.0"
-                )
-                if hf_image:
-                    buf = io.BytesIO()
-                    hf_image.save(buf, format='JPEG', quality=90)
-                    image_bytes = buf.getvalue()
-                    model_used = "HuggingFace SDXL"
-                    logger.info("HuggingFace SDXL succeeded")
+                timeout = 30 + (attempt * 30)  # 30s, 60s, 90s
+                logger.info(f"Pollinations attempt {attempt+1}: timeout={timeout}s")
+                response = req.get(url, timeout=timeout)
+                if response.status_code == 200 and len(response.content) > 5000:
+                    image_bytes = response.content
+                    model_used = "Pollinations AI"
+                    logger.info(f"Pollinations succeeded on attempt {attempt+1}")
+                    break
             except Exception as e:
-                logger.warning(f"HuggingFace SDXL failed: {e}")
+                logger.warning(f"Pollinations attempt {attempt+1} failed: {e}")
+                continue
         
-        # Strategy 3: Try another HuggingFace model
-        if not image_bytes:
-            try:
-                logger.info("Trying HuggingFace FLUX...")
-                hf_image = hf_client.text_to_image(
-                    request.prompt,
-                    model="black-forest-labs/FLUX.1-dev"
-                )
-                if hf_image:
-                    buf = io.BytesIO()
-                    hf_image.save(buf, format='JPEG', quality=90)
-                    image_bytes = buf.getvalue()
-                    model_used = "HuggingFace FLUX"
-                    logger.info("HuggingFace FLUX succeeded")
-            except Exception as e:
-                logger.warning(f"HuggingFace FLUX failed: {e}")
+        # Fallback: HuggingFace (only if token is valid)
+        if not image_bytes and HF_TOKEN:
+            for hf_model in ["stabilityai/stable-diffusion-xl-base-1.0", "black-forest-labs/FLUX.1-dev"]:
+                try:
+                    logger.info(f"Trying HuggingFace: {hf_model}")
+                    hf_image = hf_client.text_to_image(request.prompt, model=hf_model)
+                    if hf_image:
+                        buf = io.BytesIO()
+                        hf_image.save(buf, format='JPEG', quality=90)
+                        image_bytes = buf.getvalue()
+                        model_used = f"HuggingFace {hf_model.split('/')[-1]}"
+                        break
+                except Exception as e:
+                    logger.warning(f"HuggingFace {hf_model} failed: {e}")
         
         if not image_bytes:
-            raise Exception("All image generation providers failed. Please try again.")
+            raise Exception("Image generation is temporarily unavailable. Please try again in a moment.")
         
-        # Save image
         image = PILImage.open(io.BytesIO(image_bytes))
         image = image.convert("RGB")
         image.save(img_path, format='JPEG', quality=90)
