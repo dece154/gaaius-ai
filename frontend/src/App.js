@@ -1256,14 +1256,18 @@ const MainApp = () => {
     }
   };
 
-  const handleSpeak = async (text) => {
+  const handleSpeak = async (text, lang = "en") => {
     try {
-      toast.info("Generating speech...");
-      const res = await api.post("/tts", { text, voice: "en" }, { responseType: 'blob' });
-      const audioUrl = URL.createObjectURL(res.data);
-      new Audio(audioUrl).play();
+      const toastId = toast.loading("Generating speech...");
+      const res = await api.post("/tts/speak", { text, lang });
+      toast.dismiss(toastId);
+      if (res.data.audio_url) {
+        const audioUrl = `${BACKEND_URL}${res.data.audio_url}`;
+        new Audio(audioUrl).play();
+        toast.success(`Speaking in ${res.data.language || lang}`);
+      }
     } catch (error) {
-      toast.error("TTS failed");
+      toast.error("Speech generation failed");
     }
   };
 
