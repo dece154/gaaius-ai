@@ -14,7 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   MessageSquare, Image, Video, Mic, MicOff, Send, Plus, Trash2, Volume2,
   Loader2, Sparkles, Zap, Menu, X, Download, User, LogOut, Crown, Music,
-  FileCode, FolderOpen, Hammer, Eye, Code, Settings, CreditCard, Edit, Save
+  FileCode, FolderOpen, Hammer, Eye, Code, Settings, CreditCard, Edit, Save,
+  PanelLeftClose, PanelLeftOpen, Clock, Globe, AudioLines
 } from "lucide-react";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -1020,6 +1021,15 @@ const MainApp = () => {
   const [showAuth, setShowAuth] = useState(false);
   const [showPro, setShowPro] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    return localStorage.getItem("gaaius_sidebar_collapsed") === "true";
+  });
+  const [audioVoice, setAudioVoice] = useState("default");
+  const [audioLang, setAudioLang] = useState("auto");
+  const [audioDuration, setAudioDuration] = useState(10);
+  const [autoSpeak, setAutoSpeak] = useState(() => {
+    return localStorage.getItem("gaaius_auto_speak") === "true";
+  });
   
   const { user, token, logout } = useAuthStore();
   const messagesEndRef = useRef(null);
@@ -1033,6 +1043,16 @@ const MainApp = () => {
   useEffect(() => {
     localStorage.setItem("gaaius_mode", mode);
   }, [mode]);
+
+  // Save sidebar collapsed state
+  useEffect(() => {
+    localStorage.setItem("gaaius_sidebar_collapsed", sidebarCollapsed.toString());
+  }, [sidebarCollapsed]);
+
+  // Save auto-speak preference
+  useEffect(() => {
+    localStorage.setItem("gaaius_auto_speak", autoSpeak.toString());
+  }, [autoSpeak]);
 
   // Handle mode change with navigation
   const handleModeChange = (newMode) => {
@@ -1116,6 +1136,7 @@ const MainApp = () => {
             createSession={createSession} deleteSession={deleteSession} navigate={navigate}
             user={user} showAuth={() => setShowAuth(true)} showPro={() => setShowPro(true)} 
             showProfile={() => setShowProfile(true)} logout={logout}
+            collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(c => !c)}
           />
           {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />}
           <main className="flex-1 flex flex-col min-w-0">
@@ -1198,6 +1219,11 @@ const MainApp = () => {
           const filtered = prev.filter(m => m.id !== tempUserMsg.id);
           return [...filtered, { ...tempUserMsg, id: `user-${Date.now()}` }, { id: res.data.id, role: "assistant", content: res.data.content, timestamp: res.data.timestamp }];
         });
+        
+        // Auto-speak the response if enabled
+        if (autoSpeak && res.data.content) {
+          handleSpeak(res.data.content, "en");
+        }
       } else if (mode === "image") {
         const toastId = toast.loading("Generating image...");
         // Run image generation - don't block the UI
@@ -1233,7 +1259,7 @@ const MainApp = () => {
       } else if (mode === "audio") {
         const toastId = toast.loading("Generating audio...");
         // Run audio generation in background (non-blocking)
-        api.post("/audio/generate", { prompt: userInput, duration: 10, type: "music" })
+        api.post("/audio/generate", { prompt: userInput, duration: audioDuration, type: "music", voice: audioVoice, language: audioLang === "auto" ? "" : audioLang })
           .then(res => {
             const newGen = { ...res.data, type: "audio", url: res.data.audio_url || res.data.url };
             setGenerations(prev => [newGen, ...prev]);
@@ -1335,6 +1361,7 @@ const MainApp = () => {
           createSession={createSession} deleteSession={deleteSession} navigate={navigate}
           user={user} showAuth={() => setShowAuth(true)} showPro={() => setShowPro(true)} 
           showProfile={() => setShowProfile(true)} logout={logout}
+          collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(c => !c)}
         />
 
         {/* Mobile overlay */}
@@ -1368,6 +1395,56 @@ const MainApp = () => {
                   </SelectContent>
                 </Select>
               )}
+
+              {mode === "audio" && (
+                <>
+                  <Select value={audioLang} onValueChange={setAudioLang}>
+                    <SelectTrigger className="w-32 h-8 bg-white/5 border-white/10 text-xs" data-testid="audio-lang-select">
+                      <Globe className="w-3 h-3 mr-1" /><SelectValue placeholder="Language" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">Auto-detect</SelectItem>
+                      <SelectItem value="en">English</SelectItem>
+                      <SelectItem value="es">Spanish</SelectItem>
+                      <SelectItem value="fr">French</SelectItem>
+                      <SelectItem value="de">German</SelectItem>
+                      <SelectItem value="it">Italian</SelectItem>
+                      <SelectItem value="pt">Portuguese</SelectItem>
+                      <SelectItem value="zh-CN">Chinese</SelectItem>
+                      <SelectItem value="ja">Japanese</SelectItem>
+                      <SelectItem value="ko">Korean</SelectItem>
+                      <SelectItem value="ru">Russian</SelectItem>
+                      <SelectItem value="ar">Arabic</SelectItem>
+                      <SelectItem value="hi">Hindi</SelectItem>
+                      <SelectItem value="af">Afrikaans</SelectItem>
+                      <SelectItem value="zu">Zulu</SelectItem>
+                      <SelectItem value="sw">Swahili</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={audioVoice} onValueChange={setAudioVoice}>
+                    <SelectTrigger className="w-28 h-8 bg-white/5 border-white/10 text-xs" data-testid="audio-voice-select">
+                      <AudioLines className="w-3 h-3 mr-1" /><SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">Default</SelectItem>
+                      <SelectItem value="male">Male</SelectItem>
+                      <SelectItem value="female">Female</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={String(audioDuration)} onValueChange={(v) => setAudioDuration(Number(v))}>
+                    <SelectTrigger className="w-24 h-8 bg-white/5 border-white/10 text-xs" data-testid="audio-duration-select">
+                      <Clock className="w-3 h-3 mr-1" /><SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">30 sec</SelectItem>
+                      <SelectItem value="10">1 min</SelectItem>
+                      <SelectItem value="20">2 min</SelectItem>
+                      <SelectItem value="30">3 min</SelectItem>
+                      <SelectItem value="60">5 min</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </>
+              )}
               
               {mode === "file" && (
                 <Select value={fileType} onValueChange={setFileType}>
@@ -1385,9 +1462,20 @@ const MainApp = () => {
               
               {/* New Chat button at top right */}
               {mode === "chat" && (
-                <Button size="sm" onClick={createSession} variant="outline" className="h-8 text-xs">
-                  <Plus className="w-4 h-4 mr-1" /> New Chat
-                </Button>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => setAutoSpeak(v => !v)} 
+                    className={`flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs transition ${autoSpeak ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-white/5 text-muted-foreground hover:bg-white/10"}`}
+                    data-testid="auto-speak-toggle"
+                    title={autoSpeak ? "Auto-speak ON" : "Auto-speak OFF"}
+                  >
+                    <Volume2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">{autoSpeak ? "Voice On" : "Voice Off"}</span>
+                  </button>
+                  <Button size="sm" onClick={createSession} variant="outline" className="h-8 text-xs">
+                    <Plus className="w-4 h-4 mr-1" /> New Chat
+                  </Button>
+                </div>
               )}
             </div>
           </header>
@@ -1459,32 +1547,41 @@ const MainApp = () => {
 };
 
 // Sidebar Component
-const Sidebar = ({ mode, setMode, sessions, currentSession, setCurrentSession, setSidebarOpen, sidebarOpen, createSession, deleteSession, navigate, user, showAuth, showPro, showProfile, logout }) => {
+const Sidebar = ({ mode, setMode, sessions, currentSession, setCurrentSession, setSidebarOpen, sidebarOpen, createSession, deleteSession, navigate, user, showAuth, showPro, showProfile, logout, collapsed, onToggleCollapse }) => {
   return (
-    <aside className={`fixed md:relative z-50 h-full w-72 glass border-r border-white/10 flex flex-col transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`} data-testid="sidebar">
+    <aside className={`fixed md:relative z-50 h-full glass border-r border-white/10 flex flex-col transition-all duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"} ${collapsed ? "w-16" : "w-72"}`} data-testid="sidebar">
       {/* Logo */}
-      <div className="p-6 border-b border-white/10">
+      <div className={`p-4 border-b border-white/10 ${collapsed ? "px-2" : "p-6"}`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center flex-shrink-0">
               <Sparkles className="w-5 h-5 text-primary" />
             </div>
-            <div>
-              <h1 className="font-secondary text-xl font-bold">GAAIUS</h1>
-              <p className="font-mono text-xs text-muted-foreground uppercase">AI</p>
-            </div>
+            {!collapsed && (
+              <div>
+                <h1 className="font-secondary text-xl font-bold">GAAIUS</h1>
+                <p className="font-mono text-xs text-muted-foreground uppercase">AI</p>
+              </div>
+            )}
           </div>
+          <button 
+            onClick={onToggleCollapse} 
+            className="hidden md:flex p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-white transition"
+            data-testid="sidebar-collapse-btn"
+          >
+            {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+          </button>
         </div>
       </div>
 
       {/* Mode Selector */}
-      <div className="p-4 border-b border-white/10">
-        <p className="font-mono text-xs text-muted-foreground uppercase mb-3">Mode</p>
-        <div className="grid grid-cols-5 gap-1">
+      <div className={`p-4 border-b border-white/10 ${collapsed ? "px-2" : ""}`}>
+        {!collapsed && <p className="font-mono text-xs text-muted-foreground uppercase mb-3">Mode</p>}
+        <div className={`grid gap-1 ${collapsed ? "grid-cols-1" : "grid-cols-5"}`}>
           {Object.entries(MODES).map(([key, config]) => {
             const Icon = config.icon;
             return (
-              <button key={key} onClick={() => setMode(key)} className={`p-2 rounded-lg transition-all ${mode === key ? `${config.bgColor} ${config.borderColor} border` : "hover:bg-white/5"}`} data-testid={`mode-${key}`}>
+              <button key={key} onClick={() => setMode(key)} className={`p-2 rounded-lg transition-all ${mode === key ? `${config.bgColor} ${config.borderColor} border` : "hover:bg-white/5"}`} data-testid={`mode-${key}`} title={config.label}>
                 <Icon className={`w-4 h-4 mx-auto ${mode === key ? config.color : "text-muted-foreground"}`} />
               </button>
             );
@@ -1493,73 +1590,100 @@ const Sidebar = ({ mode, setMode, sessions, currentSession, setCurrentSession, s
       </div>
 
       {/* Navigation */}
-      <div className="p-4 border-b border-white/10">
+      <div className={`p-4 border-b border-white/10 ${collapsed ? "px-2" : ""}`}>
         <div className="space-y-1">
-          <button onClick={() => navigate("/projects")} className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 text-left">
-            <FolderOpen className="w-4 h-4 text-muted-foreground" /><span className="text-sm">Projects</span>
+          <button onClick={() => navigate("/projects")} className={`w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 text-left ${collapsed ? "justify-center" : ""}`} title="Projects">
+            <FolderOpen className="w-4 h-4 text-muted-foreground flex-shrink-0" />{!collapsed && <span className="text-sm">Projects</span>}
           </button>
-          <button onClick={() => navigate("/build")} className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 text-left">
-            <Hammer className="w-4 h-4 text-muted-foreground" /><span className="text-sm">Build</span>
+          <button onClick={() => navigate("/build")} className={`w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 text-left ${collapsed ? "justify-center" : ""}`} title="Build">
+            <Hammer className="w-4 h-4 text-muted-foreground flex-shrink-0" />{!collapsed && <span className="text-sm">Build</span>}
           </button>
-          <button onClick={() => navigate("/documents")} className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 text-left">
-            <FileCode className="w-4 h-4 text-cyan-400" /><span className="text-sm">AI Document Studio</span>
+          <button onClick={() => navigate("/documents")} className={`w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 text-left ${collapsed ? "justify-center" : ""}`} title="AI Document Studio">
+            <FileCode className="w-4 h-4 text-cyan-400 flex-shrink-0" />{!collapsed && <span className="text-sm">AI Document Studio</span>}
           </button>
         </div>
       </div>
 
       {/* Sessions */}
-      <div className="flex-1 overflow-hidden flex flex-col">
-        <div className="p-4 flex items-center justify-between">
-          <p className="font-mono text-xs text-muted-foreground uppercase">Chats</p>
-          <Button size="sm" variant="ghost" onClick={createSession} className="h-6 w-6 p-0" data-testid="new-chat-btn">
+      {!collapsed && (
+        <div className="flex-1 overflow-hidden flex flex-col">
+          <div className="p-4 flex items-center justify-between">
+            <p className="font-mono text-xs text-muted-foreground uppercase">Chats</p>
+            <Button size="sm" variant="ghost" onClick={createSession} className="h-6 w-6 p-0" data-testid="new-chat-btn">
+              <Plus className="w-4 h-4" />
+            </Button>
+          </div>
+          <ScrollArea className="flex-1 px-4">
+            {sessions.map(session => (
+              <div key={session.id} className={`group flex items-center gap-3 p-3 rounded-xl mb-2 cursor-pointer transition-all ${currentSession?.id === session.id ? "bg-primary/20 border border-primary/30" : "hover:bg-white/5"}`}
+                onClick={() => { 
+                  setCurrentSession(session); 
+                  setSidebarOpen(false);
+                  setMode("chat");
+                  navigate("/");
+                }} data-testid={`session-${session.id}`}>
+                <MessageSquare className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                <span className="flex-1 truncate text-sm">{session.name}</span>
+                <button onClick={(e) => { e.stopPropagation(); deleteSession(session.id); }} className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 rounded flex-shrink-0" data-testid={`delete-session-${session.id}`}>
+                  <Trash2 className="w-4 h-4 text-destructive" />
+                </button>
+              </div>
+            ))}
+          </ScrollArea>
+        </div>
+      )}
+
+      {/* Collapsed: just a + button for new chat */}
+      {collapsed && (
+        <div className="flex-1 flex flex-col items-center pt-4">
+          <Button size="sm" variant="ghost" onClick={createSession} className="h-8 w-8 p-0" data-testid="new-chat-btn-collapsed" title="New Chat">
             <Plus className="w-4 h-4" />
           </Button>
         </div>
-        <ScrollArea className="flex-1 px-4">
-          {sessions.map(session => (
-            <div key={session.id} className={`group flex items-center gap-3 p-3 rounded-xl mb-2 cursor-pointer transition-all ${currentSession?.id === session.id ? "bg-primary/20 border border-primary/30" : "hover:bg-white/5"}`}
-              onClick={() => { 
-                setCurrentSession(session); 
-                setSidebarOpen(false);
-                setMode("chat");
-                navigate("/");
-              }} data-testid={`session-${session.id}`}>
-              <MessageSquare className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              <span className="flex-1 truncate text-sm">{session.name}</span>
-              <button onClick={(e) => { e.stopPropagation(); deleteSession(session.id); }} className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 rounded flex-shrink-0" data-testid={`delete-session-${session.id}`}>
-                <Trash2 className="w-4 h-4 text-destructive" />
-              </button>
-            </div>
-          ))}
-        </ScrollArea>
-      </div>
+      )}
 
       {/* User */}
-      <div className="p-4 border-t border-white/10">
+      <div className={`p-4 border-t border-white/10 ${collapsed ? "px-2" : ""}`}>
         {user ? (
-          <div className="glass-light rounded-xl p-3">
-            <div 
-              className="flex items-center gap-3 cursor-pointer hover:opacity-80"
-              onClick={showProfile}
-            >
+          collapsed ? (
+            <button onClick={showProfile} className="w-full flex items-center justify-center">
               <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
                 <User className="w-4 h-4 text-primary" />
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user.name || user.email}</p>
-                {user.is_pro && <span className="text-xs text-yellow-400 flex items-center gap-1"><Crown className="w-3 h-3" /> Pro</span>}
+            </button>
+          ) : (
+            <div className="glass-light rounded-xl p-3">
+              <div 
+                className="flex items-center gap-3 cursor-pointer hover:opacity-80"
+                onClick={showProfile}
+              >
+                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                  <User className="w-4 h-4 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{user.name || user.email}</p>
+                  {user.is_pro && <span className="text-xs text-yellow-400 flex items-center gap-1"><Crown className="w-3 h-3" /> Pro</span>}
+                </div>
               </div>
+              {!user.is_pro && (
+                <Button size="sm" onClick={showPro} className="w-full mt-2 bg-yellow-500 hover:bg-yellow-600 text-black text-xs">
+                  <Crown className="w-3 h-3 mr-1" /> Go Pro - $1
+                </Button>
+              )}
             </div>
-            {!user.is_pro && (
-              <Button size="sm" onClick={showPro} className="w-full mt-2 bg-yellow-500 hover:bg-yellow-600 text-black text-xs">
-                <Crown className="w-3 h-3 mr-1" /> Go Pro - $1
-              </Button>
-            )}
-          </div>
+          )
         ) : (
-          <Button onClick={showAuth} className="w-full" variant="outline">
-            <User className="w-4 h-4 mr-2" /> Sign In
-          </Button>
+          collapsed ? (
+            <button onClick={showAuth} className="w-full flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                <User className="w-4 h-4 text-muted-foreground" />
+              </div>
+            </button>
+          ) : (
+            <Button onClick={showAuth} className="w-full" variant="outline">
+              <User className="w-4 h-4 mr-2" /> Sign In
+            </Button>
+          )
         )}
       </div>
     </aside>

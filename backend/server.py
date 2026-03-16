@@ -129,6 +129,8 @@ class AudioGenerationRequest(BaseModel):
     prompt: str
     duration: int = 10
     type: str = "music"  # music, sfx, ambient
+    voice: str = "default"  # default, male, female
+    language: str = ""  # empty = auto-detect
 
 class FileGenerationRequest(BaseModel):
     prompt: str
@@ -551,28 +553,66 @@ async def generate_image(request: ImageGenerationRequest, user = Depends(get_cur
         import requests as req
         from PIL import Image as PILImage
         import urllib.parse
-        import time
         
-        # Use Pollinations.ai - simple URL works best
-        encoded_prompt = urllib.parse.quote(request.prompt)
-        API_URL = f"https://image.pollinations.ai/prompt/{encoded_prompt}"
-        
-        logger.info(f"Generating image: {API_URL}")
-        
-        # Simple request without extra params
-        response = req.get(API_URL, timeout=120)
-        
-        if response.status_code != 200 or len(response.content) < 1000:
-            raise Exception(f"Pollinations error: status {response.status_code}")
-        
-        image_bytes = response.content
-        
-        # Save image
         gen_id = str(uuid.uuid4())
         img_filename = f"{gen_id}.jpg"
         img_path = ROOT_DIR / "static" / img_filename
         (ROOT_DIR / "static").mkdir(exist_ok=True)
         
+        image_bytes = None
+        model_used = "Unknown"
+        
+        # Strategy 1: Try Pollinations.ai (fast, free)
+        try:
+            encoded_prompt = urllib.parse.quote(request.prompt)
+            API_URL = f"https://image.pollinations.ai/prompt/{encoded_prompt}?nologo=true&width=1024&height=1024"
+            logger.info(f"Trying Pollinations: {API_URL}")
+            response = req.get(API_URL, timeout=60)
+            if response.status_code == 200 and len(response.content) > 5000:
+                image_bytes = response.content
+                model_used = "Pollinations AI"
+                logger.info("Pollinations succeeded")
+        except Exception as e:
+            logger.warning(f"Pollinations failed: {e}")
+        
+        # Strategy 2: Fall back to HuggingFace Inference
+        if not image_bytes:
+            try:
+                logger.info("Trying HuggingFace SDXL...")
+                hf_image = hf_client.text_to_image(
+                    request.prompt, 
+                    model="stabilityai/stable-diffusion-xl-base-1.0"
+                )
+                if hf_image:
+                    buf = io.BytesIO()
+                    hf_image.save(buf, format='JPEG', quality=90)
+                    image_bytes = buf.getvalue()
+                    model_used = "HuggingFace SDXL"
+                    logger.info("HuggingFace SDXL succeeded")
+            except Exception as e:
+                logger.warning(f"HuggingFace SDXL failed: {e}")
+        
+        # Strategy 3: Try another HuggingFace model
+        if not image_bytes:
+            try:
+                logger.info("Trying HuggingFace FLUX...")
+                hf_image = hf_client.text_to_image(
+                    request.prompt,
+                    model="black-forest-labs/FLUX.1-dev"
+                )
+                if hf_image:
+                    buf = io.BytesIO()
+                    hf_image.save(buf, format='JPEG', quality=90)
+                    image_bytes = buf.getvalue()
+                    model_used = "HuggingFace FLUX"
+                    logger.info("HuggingFace FLUX succeeded")
+            except Exception as e:
+                logger.warning(f"HuggingFace FLUX failed: {e}")
+        
+        if not image_bytes:
+            raise Exception("All image generation providers failed. Please try again.")
+        
+        # Save image
         image = PILImage.open(io.BytesIO(image_bytes))
         image = image.convert("RGB")
         image.save(img_path, format='JPEG', quality=90)
@@ -582,10 +622,10 @@ async def generate_image(request: ImageGenerationRequest, user = Depends(get_cur
         
         await db.generations.insert_one({
             "id": gen_id, "type": "image", "prompt": request.prompt, "url": image_url,
-            "model_used": "Pollinations AI", "session_id": request.session_id, "timestamp": timestamp
+            "model_used": model_used, "session_id": request.session_id, "timestamp": timestamp
         })
         
-        return ImageGenerationResponse(id=gen_id, prompt=request.prompt, image_url=image_url, model_used="Pollinations AI", timestamp=timestamp)
+        return ImageGenerationResponse(id=gen_id, prompt=request.prompt, image_url=image_url, model_used=model_used, timestamp=timestamp)
         
     except Exception as e:
         logger.error(f"Image generation error: {e}")
@@ -702,10 +742,9 @@ async def generate_audio(request: AudioGenerationRequest, user = Depends(get_cur
         audio_path = ROOT_DIR / "static" / "audio" / audio_filename
         (ROOT_DIR / "static" / "audio").mkdir(parents=True, exist_ok=True)
         
-        # Get voice/language from request or detect from prompt
-        # Voice types: male, female, old, young (gTTS doesn't support these but we note them)
-        voice_type = getattr(request, 'voice', 'default')
-        lang = getattr(request, 'language', None)
+        # Get voice/language from request
+        voice_type = request.voice or 'default'
+        lang = request.language if request.language else None
         
         if not lang:
             # Detect language from prompt
