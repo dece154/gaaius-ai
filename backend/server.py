@@ -457,6 +457,7 @@ async def generate_image(request: ImageGenerationRequest, user = Depends(get_cur
         import requests as req
         from PIL import Image as PILImage
         import urllib.parse
+        import time
         
         # Use Pollinations.ai - 100% FREE, no signup, no API key needed!
         encoded_prompt = urllib.parse.quote(request.prompt)
@@ -466,15 +467,29 @@ async def generate_image(request: ImageGenerationRequest, user = Depends(get_cur
         
         logger.info(f"Generating image with Pollinations: {API_URL}")
         
-        response = req.get(API_URL, timeout=120, allow_redirects=True)
+        # Retry up to 3 times
+        max_retries = 3
+        image_bytes = None
+        last_error = None
         
-        if response.status_code != 200:
-            raise Exception(f"Pollinations returned status {response.status_code}")
+        for attempt in range(max_retries):
+            try:
+                response = req.get(API_URL, timeout=120, allow_redirects=True)
+                
+                if response.status_code == 200 and len(response.content) > 1000:
+                    image_bytes = response.content
+                    break
+                else:
+                    last_error = f"Status {response.status_code}, size {len(response.content)}"
+                    if attempt < max_retries - 1:
+                        time.sleep(2)  # Wait before retry
+            except Exception as e:
+                last_error = str(e)
+                if attempt < max_retries - 1:
+                    time.sleep(2)
         
-        if len(response.content) < 1000:
-            raise Exception("Response too small, likely an error page")
-        
-        image_bytes = response.content
+        if not image_bytes:
+            raise Exception(f"Failed after {max_retries} attempts. Last error: {last_error}")
         
         # Save image
         gen_id = str(uuid.uuid4())
