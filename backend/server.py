@@ -460,14 +460,31 @@ async def generate_image(request: ImageGenerationRequest, user = Depends(get_cur
         
         # Use Pollinations.ai - 100% FREE, no signup, no API key needed!
         encoded_prompt = urllib.parse.quote(request.prompt)
-        API_URL = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
         
-        response = req.get(API_URL, timeout=120, allow_redirects=True)
+        # Try multiple Pollinations endpoints for reliability
+        endpoints = [
+            f"https://pollinations.ai/p/{encoded_prompt}?width=1024&height=1024&nologo=true",
+            f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&seed={uuid.uuid4().int % 10000}",
+        ]
         
-        if response.status_code != 200 or 'image' not in response.headers.get('content-type', ''):
-            raise Exception(f"Pollinations API error: {response.status_code}")
+        image_bytes = None
+        last_error = None
         
-        image_bytes = response.content
+        for API_URL in endpoints:
+            try:
+                response = req.get(API_URL, timeout=120, allow_redirects=True)
+                if response.status_code == 200 and len(response.content) > 1000:
+                    # Check if it's actually an image
+                    content_type = response.headers.get('content-type', '')
+                    if 'image' in content_type or response.content[:4] in [b'\xff\xd8\xff', b'\x89PNG']:
+                        image_bytes = response.content
+                        break
+            except Exception as e:
+                last_error = e
+                continue
+        
+        if not image_bytes:
+            raise Exception(f"All Pollinations endpoints failed. Last error: {last_error}")
         
         # Save image
         gen_id = str(uuid.uuid4())
@@ -477,6 +494,7 @@ async def generate_image(request: ImageGenerationRequest, user = Depends(get_cur
         
         # Convert bytes to image and save
         image = PILImage.open(io.BytesIO(image_bytes))
+        image = image.convert("RGB")  # Ensure RGB mode for JPEG
         image.save(img_path, format='JPEG', quality=90)
         
         image_url = f"/api/static/{img_filename}"
