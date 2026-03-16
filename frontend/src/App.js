@@ -565,11 +565,18 @@ const BuildPage = ({ showSidebar = false, navigate, user, showAuth, showPro, sho
                 </div>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {chatHistory.map((msg, i) => (
-                  <div key={i} className={`p-3 rounded-xl text-sm ${msg.role === "user" ? "bg-primary/20 ml-4" : "bg-white/5 mr-4"}`}>
-                    <p className="text-xs text-muted-foreground mb-1">{msg.role === "user" ? "You" : "GAAIUS AI"}</p>
-                    {msg.content}
+                  <div key={i} className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === "user" ? "bg-blue-600" : "bg-gradient-to-br from-primary to-purple-600"}`}>
+                      {msg.role === "user" ? <User className="w-4 h-4 text-white" /> : <Sparkles className="w-4 h-4 text-white" />}
+                    </div>
+                    <div className={`flex-1 ${msg.role === "user" ? "text-right" : ""}`}>
+                      <p className="text-xs text-muted-foreground mb-1">{msg.role === "user" ? "You" : "GAAIUS AI"}</p>
+                      <div className={`inline-block p-3 rounded-2xl text-sm leading-relaxed ${msg.role === "user" ? "bg-blue-600 text-white rounded-br-md" : "bg-[#1e1e1e] border border-white/10 rounded-bl-md"}`}>
+                        {msg.content}
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
