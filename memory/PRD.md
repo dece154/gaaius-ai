@@ -43,7 +43,7 @@ Build a sophisticated AI assistant called "GAAIUS AI" - a unified interface for 
 - `/api/payment/*` - PayPal + PayFast payments
 
 ## Known Limitations
-- **Image Generation**: Free Pollinations.ai API is intermittent; HuggingFace token may expire
+- **Image Generation**: Free Pollinations.ai API is intermittent (sometimes times out). Retry logic with 3 attempts (30s, 60s, 90s) implemented. HuggingFace token may expire - user needs to refresh at https://huggingface.co/settings/tokens
 - **Video Generation**: Uses slideshow engine, not true text-to-video (no free API available)
 - **Audio Voices**: gTTS doesn't support true voice selection (male/female) - parameter stored but not differentiated
 
