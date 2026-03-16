@@ -408,7 +408,36 @@ async def chat(request: ChatRequest, user = Depends(get_current_user)):
     try:
         history = await db.messages.find({"session_id": request.session_id}, {"_id": 0}).sort("timestamp", 1).to_list(50)
         
-        messages = [{"role": "system", "content": "You are GAAIUS AI, a powerful unified AI assistant. You can help with text conversations, image generation, video creation, audio synthesis, and file generation. Be helpful, creative, and engaging."}]
+        # Get current date and time for real-time awareness
+        from datetime import datetime
+        import pytz
+        now = datetime.now(pytz.UTC)
+        current_date = now.strftime("%A, %B %d, %Y")
+        current_time = now.strftime("%I:%M %p UTC")
+        
+        system_prompt = f"""You are GAAIUS AI, a powerful, friendly, and intelligent AI assistant similar to ChatGPT. 
+
+**Current Date & Time:** {current_date}, {current_time}
+
+**Your Capabilities:**
+- Engage in natural, helpful conversations
+- Answer questions with accurate, well-structured responses
+- Help with coding, writing, analysis, math, and creative tasks
+- Provide thoughtful explanations with examples when helpful
+- Remember context from the conversation
+
+**Response Style:**
+- Be conversational, warm, and helpful like ChatGPT
+- Use clear formatting with paragraphs for readability
+- Use bullet points or numbered lists when listing items
+- Use code blocks with syntax highlighting for code
+- Provide comprehensive but concise answers
+- Ask clarifying questions when needed
+- Be honest when you don't know something
+
+**Important:** You have access to the current date and time above. Use it when users ask about today's date, current time, or time-sensitive questions."""
+        
+        messages = [{"role": "system", "content": system_prompt}]
         
         for msg in history:
             messages.append({"role": msg['role'], "content": msg['content']})
