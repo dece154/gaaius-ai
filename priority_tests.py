@@ -9,7 +9,7 @@ import time
 from datetime import datetime
 
 class PriorityTester:
-    def __init__(self, base_url="https://ai-command-hub-20.preview.emergentagent.com"):
+    def __init__(self, base_url="https://groq-chat-preview.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.token = None
