@@ -692,113 +692,117 @@ async def speech_to_text(audio: UploadFile = File(...), user = Depends(get_curre
 
 @api_router.post("/audio/generate")
 async def generate_audio(request: AudioGenerationRequest, user = Depends(get_current_user)):
-    """Generate audio narration - AI creates stories, narrates text, or reads whatever you type"""
+    """Generate audio from any prompt - stories, narration, anything. Supports voice and language selection."""
     try:
         from gtts import gTTS
+        import re
         
         gen_id = str(uuid.uuid4())
         audio_filename = f"{gen_id}.mp3"
         audio_path = ROOT_DIR / "static" / "audio" / audio_filename
         (ROOT_DIR / "static" / "audio").mkdir(parents=True, exist_ok=True)
         
-        # Detect language hints in prompt
+        # Get voice/language from request or detect from prompt
+        # Voice types: male, female, old, young (gTTS doesn't support these but we note them)
+        voice_type = getattr(request, 'voice', 'default')
+        lang = getattr(request, 'language', None)
+        
+        if not lang:
+            # Detect language from prompt
+            prompt_lower = request.prompt.lower()
+            lang = 'en'  # Default English
+            
+            lang_keywords = {
+                'es': ['spanish', 'español', 'espanol'],
+                'fr': ['french', 'français', 'francais'],
+                'de': ['german', 'deutsch'],
+                'it': ['italian', 'italiano'],
+                'pt': ['portuguese', 'português'],
+                'zh-CN': ['chinese', '中文', 'mandarin'],
+                'ja': ['japanese', '日本語'],
+                'ko': ['korean', '한국어'],
+                'ru': ['russian', 'русский'],
+                'ar': ['arabic', 'عربي'],
+                'hi': ['hindi', 'हिंदी'],
+                'af': ['afrikaans'],
+                'zu': ['zulu'],
+                'sw': ['swahili'],
+                'nl': ['dutch'],
+                'pl': ['polish'],
+                'tr': ['turkish'],
+                'vi': ['vietnamese'],
+                'th': ['thai'],
+                'id': ['indonesian']
+            }
+            
+            for code, keywords in lang_keywords.items():
+                if any(kw in prompt_lower for kw in keywords):
+                    lang = code
+                    break
+        
+        # Extract duration if specified
         prompt_lower = request.prompt.lower()
-        lang = 'en'  # Default English
-        
-        # Language detection based on keywords
-        if any(word in prompt_lower for word in ['spanish', 'español', 'espanol']):
-            lang = 'es'
-        elif any(word in prompt_lower for word in ['french', 'français', 'francais']):
-            lang = 'fr'
-        elif any(word in prompt_lower for word in ['german', 'deutsch']):
-            lang = 'de'
-        elif any(word in prompt_lower for word in ['italian', 'italiano']):
-            lang = 'it'
-        elif any(word in prompt_lower for word in ['portuguese', 'português']):
-            lang = 'pt'
-        elif any(word in prompt_lower for word in ['chinese', '中文']):
-            lang = 'zh-CN'
-        elif any(word in prompt_lower for word in ['japanese', '日本語']):
-            lang = 'ja'
-        elif any(word in prompt_lower for word in ['korean', '한국어']):
-            lang = 'ko'
-        elif any(word in prompt_lower for word in ['russian', 'русский']):
-            lang = 'ru'
-        elif any(word in prompt_lower for word in ['arabic', 'عربي']):
-            lang = 'ar'
-        elif any(word in prompt_lower for word in ['hindi', 'हिंदी']):
-            lang = 'hi'
-        
-        # Detect if user wants a story or creative content
-        is_story_request = any(word in prompt_lower for word in [
-            'story', 'tell me', 'create a', 'write a', 'make a', 'narrate a',
-            'story about', 'tale', 'adventure', 'explain', 'describe'
-        ])
-        
-        # Extract duration if specified (e.g., "2 minutes", "30 seconds")
-        import re
         duration_match = re.search(r'(\d+)\s*(minute|min|second|sec)', prompt_lower)
         target_words = 150  # Default ~1 minute
         if duration_match:
             num = int(duration_match.group(1))
             unit = duration_match.group(2)
             if 'min' in unit:
-                target_words = num * 150  # ~150 words per minute
+                target_words = num * 150
             else:
-                target_words = max(30, num * 2)  # ~2 words per second
+                target_words = max(30, num * 2)
         
-        if is_story_request:
-            # Use AI to create the story/content
-            completion = groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "system", "content": f"""You are a master storyteller and narrator. Create engaging, vivid content based on the user's request.
-- If they ask for a story, write an entertaining story with characters and plot
-- If they ask for an explanation, provide a clear and engaging explanation
-- If they ask for a description, paint a vivid picture with words
+        # Use AI to create content from the prompt
+        completion = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": f"""You are a professional narrator and storyteller. Create exactly what the user asks for.
+
+If they ask for a story, write a complete engaging story.
+If they ask for narration, narrate it professionally.
+If they just type something, read it naturally as narration.
+
+Guidelines:
 - Target approximately {target_words} words
-- Make it suitable for audio narration (no visual elements, emojis, or formatting)
-- Use natural, flowing language that sounds great when read aloud"""},
-                    {"role": "user", "content": request.prompt}
-                ],
-                temperature=0.8,
-                max_tokens=min(4000, target_words * 2)
-            )
-            narration_text = completion.choices[0].message.content
-        else:
-            # Direct narration - just read what they typed or enhance slightly
-            if len(request.prompt) < 20:
-                narration_text = request.prompt
-            else:
-                # Light enhancement for better narration
-                completion = groq_client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[
-                        {"role": "system", "content": "You are a narrator. Take the user's text and narrate it naturally. Keep the original meaning but make it flow well for audio. Do not add extra content, just narrate what they provided."},
-                        {"role": "user", "content": f"Narrate this: {request.prompt}"}
-                    ],
-                    temperature=0.3,
-                    max_tokens=1000
-                )
-                narration_text = completion.choices[0].message.content
+- Write naturally for audio (no emojis, no formatting symbols)
+- Make it engaging and interesting
+- If a duration is specified, match it (150 words ≈ 1 minute)"""},
+                {"role": "user", "content": request.prompt}
+            ],
+            temperature=0.8,
+            max_tokens=min(4000, target_words * 2)
+        )
+        narration_text = completion.choices[0].message.content
         
-        # Convert to speech using gTTS
+        # Convert to speech
         tts = gTTS(text=narration_text, lang=lang, slow=False)
         tts.save(str(audio_path))
         
         audio_url = f"/api/static/audio/{audio_filename}"
         timestamp = datetime.now(timezone.utc).isoformat()
         
-        lang_names = {'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 
-                     'it': 'Italian', 'pt': 'Portuguese', 'zh-CN': 'Chinese', 'ja': 'Japanese',
-                     'ko': 'Korean', 'ru': 'Russian', 'ar': 'Arabic', 'hi': 'Hindi'}
+        lang_names = {
+            'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 
+            'it': 'Italian', 'pt': 'Portuguese', 'zh-CN': 'Chinese', 'ja': 'Japanese',
+            'ko': 'Korean', 'ru': 'Russian', 'ar': 'Arabic', 'hi': 'Hindi',
+            'af': 'Afrikaans', 'zu': 'Zulu', 'sw': 'Swahili', 'nl': 'Dutch',
+            'pl': 'Polish', 'tr': 'Turkish', 'vi': 'Vietnamese', 'th': 'Thai', 'id': 'Indonesian'
+        }
         
         await db.generations.insert_one({
             "id": gen_id, "type": "audio", "prompt": request.prompt, "url": audio_url,
-            "content": narration_text, "language": lang_names.get(lang, 'English'), "timestamp": timestamp
+            "content": narration_text, "language": lang_names.get(lang, 'English'), 
+            "voice": voice_type, "timestamp": timestamp
         })
         
-        return {"id": gen_id, "audio_url": audio_url, "content": narration_text, "language": lang_names.get(lang, 'English'), "timestamp": timestamp}
+        return {
+            "id": gen_id, 
+            "audio_url": audio_url, 
+            "content": narration_text, 
+            "language": lang_names.get(lang, 'English'),
+            "voice": voice_type,
+            "timestamp": timestamp
+        }
         
     except Exception as e:
         logger.error(f"Audio generation error: {e}")
