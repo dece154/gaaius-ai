@@ -553,47 +553,19 @@ async def generate_image(request: ImageGenerationRequest, user = Depends(get_cur
         import urllib.parse
         import time
         
-        # Use Pollinations.ai - 100% FREE, no signup, no API key needed!
+        # Use Pollinations.ai - simple URL works best
         encoded_prompt = urllib.parse.quote(request.prompt)
+        API_URL = f"https://image.pollinations.ai/prompt/{encoded_prompt}"
         
-        # Add nologo=true and model parameter to remove watermark
-        API_URL = f"https://image.pollinations.ai/prompt/{encoded_prompt}?nologo=true&width=1024&height=1024&model=flux"
+        logger.info(f"Generating image: {API_URL}")
         
-        logger.info(f"Generating image with Pollinations: {API_URL}")
+        # Simple request without extra params
+        response = req.get(API_URL, timeout=120)
         
-        # Retry up to 3 times
-        max_retries = 3
-        image_bytes = None
-        last_error = None
+        if response.status_code != 200 or len(response.content) < 1000:
+            raise Exception(f"Pollinations error: status {response.status_code}")
         
-        for attempt in range(max_retries):
-            try:
-                response = req.get(API_URL, timeout=120, allow_redirects=True)
-                
-                if response.status_code == 200 and len(response.content) > 1000:
-                    image_bytes = response.content
-                    break
-                else:
-                    last_error = f"Status {response.status_code}, size {len(response.content)}"
-                    if attempt < max_retries - 1:
-                        time.sleep(2)  # Wait before retry
-            except Exception as e:
-                last_error = str(e)
-                if attempt < max_retries - 1:
-                    time.sleep(2)
-        
-        if not image_bytes:
-            # Fallback to simple URL without params
-            try:
-                simple_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}"
-                response = req.get(simple_url, timeout=120, allow_redirects=True)
-                if response.status_code == 200 and len(response.content) > 1000:
-                    image_bytes = response.content
-            except:
-                pass
-        
-        if not image_bytes:
-            raise Exception(f"Failed after {max_retries} attempts. Last error: {last_error}")
+        image_bytes = response.content
         
         # Save image
         gen_id = str(uuid.uuid4())
@@ -601,21 +573,19 @@ async def generate_image(request: ImageGenerationRequest, user = Depends(get_cur
         img_path = ROOT_DIR / "static" / img_filename
         (ROOT_DIR / "static").mkdir(exist_ok=True)
         
-        # Convert bytes to image and save
         image = PILImage.open(io.BytesIO(image_bytes))
-        image = image.convert("RGB")  # Ensure RGB mode for JPEG
+        image = image.convert("RGB")
         image.save(img_path, format='JPEG', quality=90)
         
         image_url = f"/api/static/{img_filename}"
-        model_used = "Pollinations AI (Free)"
         timestamp = datetime.now(timezone.utc).isoformat()
         
         await db.generations.insert_one({
             "id": gen_id, "type": "image", "prompt": request.prompt, "url": image_url,
-            "model_used": model_used, "session_id": request.session_id, "timestamp": timestamp
+            "model_used": "Pollinations AI", "session_id": request.session_id, "timestamp": timestamp
         })
         
-        return ImageGenerationResponse(id=gen_id, prompt=request.prompt, image_url=image_url, model_used=model_used, timestamp=timestamp)
+        return ImageGenerationResponse(id=gen_id, prompt=request.prompt, image_url=image_url, model_used="Pollinations AI", timestamp=timestamp)
         
     except Exception as e:
         logger.error(f"Image generation error: {e}")
