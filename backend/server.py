@@ -473,6 +473,71 @@ async def chat(request: ChatRequest, user = Depends(get_current_user)):
         logger.error(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.post("/tts/speak")
+async def text_to_speech(data: dict):
+    """Convert text to speech in any language"""
+    try:
+        from gtts import gTTS
+        
+        text = data.get("text", "")
+        lang = data.get("lang", "en")  # Default English
+        
+        if not text:
+            raise HTTPException(status_code=400, detail="Text is required")
+        
+        # Supported languages
+        lang_map = {
+            "en": "en", "english": "en",
+            "es": "es", "spanish": "es",
+            "fr": "fr", "french": "fr",
+            "de": "de", "german": "de",
+            "it": "it", "italian": "it",
+            "pt": "pt", "portuguese": "pt",
+            "zh": "zh-CN", "chinese": "zh-CN",
+            "ja": "ja", "japanese": "ja",
+            "ko": "ko", "korean": "ko",
+            "ru": "ru", "russian": "ru",
+            "ar": "ar", "arabic": "ar",
+            "hi": "hi", "hindi": "hi",
+            "nl": "nl", "dutch": "nl",
+            "pl": "pl", "polish": "pl",
+            "tr": "tr", "turkish": "tr",
+            "vi": "vi", "vietnamese": "vi",
+            "th": "th", "thai": "th",
+            "id": "id", "indonesian": "id",
+            "sv": "sv", "swedish": "sv",
+            "da": "da", "danish": "da",
+            "no": "no", "norwegian": "no",
+            "fi": "fi", "finnish": "fi",
+            "el": "el", "greek": "el",
+            "he": "he", "hebrew": "he",
+            "cs": "cs", "czech": "cs",
+            "ro": "ro", "romanian": "ro",
+            "hu": "hu", "hungarian": "hu",
+            "uk": "uk", "ukrainian": "uk",
+            "af": "af", "afrikaans": "af",
+            "zu": "zu", "zulu": "zu",
+            "sw": "sw", "swahili": "sw"
+        }
+        
+        tts_lang = lang_map.get(lang.lower(), "en")
+        
+        gen_id = str(uuid.uuid4())
+        audio_filename = f"tts_{gen_id}.mp3"
+        audio_path = ROOT_DIR / "static" / "audio" / audio_filename
+        (ROOT_DIR / "static" / "audio").mkdir(parents=True, exist_ok=True)
+        
+        tts = gTTS(text=text, lang=tts_lang, slow=False)
+        tts.save(str(audio_path))
+        
+        audio_url = f"/api/static/audio/{audio_filename}"
+        
+        return {"audio_url": audio_url, "language": tts_lang}
+        
+    except Exception as e:
+        logger.error(f"TTS error: {e}")
+        raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)}")
+
 @api_router.get("/chat/{session_id}/history")
 async def get_chat_history(session_id: str):
     messages = await db.messages.find({"session_id": session_id}, {"_id": 0}).sort("timestamp", 1).to_list(1000)
