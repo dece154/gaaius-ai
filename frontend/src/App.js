@@ -1153,11 +1153,20 @@ const MainApp = () => {
         return; // Don't wait
       } else if (mode === "file") {
         const toastId = toast.loading("Generating file...");
-        const res = await api.post("/file/generate", { prompt: userInput, file_type: fileType });
-        const newGen = { ...res.data, type: "file", url: res.data.file_url || res.data.url };
-        setGenerations(prev => [newGen, ...prev]);
-        toast.dismiss(toastId);
-        toast.success("File generated!");
+        // Run file generation - don't block the UI
+        api.post("/file/generate", { prompt: userInput, file_type: fileType }, { timeout: 120000 })
+          .then(res => {
+            const newGen = { ...res.data, type: "file", url: res.data.file_url || res.data.url };
+            setGenerations(prev => [newGen, ...prev]);
+            toast.dismiss(toastId);
+            toast.success("File generated!");
+          })
+          .catch((err) => {
+            toast.dismiss(toastId);
+            toast.error(err.response?.data?.detail || "File generation failed");
+          });
+        setLoading(false);
+        return; // Don't wait
       }
     } catch (error) {
       toast.error(error.response?.data?.detail || "Something went wrong");
