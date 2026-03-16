@@ -461,30 +461,20 @@ async def generate_image(request: ImageGenerationRequest, user = Depends(get_cur
         # Use Pollinations.ai - 100% FREE, no signup, no API key needed!
         encoded_prompt = urllib.parse.quote(request.prompt)
         
-        # Try multiple Pollinations endpoints for reliability
-        endpoints = [
-            f"https://pollinations.ai/p/{encoded_prompt}?width=1024&height=1024&nologo=true",
-            f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&seed={uuid.uuid4().int % 10000}",
-        ]
+        # Simple Pollinations URL that works reliably
+        API_URL = f"https://image.pollinations.ai/prompt/{encoded_prompt}"
         
-        image_bytes = None
-        last_error = None
+        logger.info(f"Generating image with Pollinations: {API_URL}")
         
-        for API_URL in endpoints:
-            try:
-                response = req.get(API_URL, timeout=120, allow_redirects=True)
-                if response.status_code == 200 and len(response.content) > 1000:
-                    # Check if it's actually an image
-                    content_type = response.headers.get('content-type', '')
-                    if 'image' in content_type or response.content[:4] in [b'\xff\xd8\xff', b'\x89PNG']:
-                        image_bytes = response.content
-                        break
-            except Exception as e:
-                last_error = e
-                continue
+        response = req.get(API_URL, timeout=120, allow_redirects=True)
         
-        if not image_bytes:
-            raise Exception(f"All Pollinations endpoints failed. Last error: {last_error}")
+        if response.status_code != 200:
+            raise Exception(f"Pollinations returned status {response.status_code}")
+        
+        if len(response.content) < 1000:
+            raise Exception("Response too small, likely an error page")
+        
+        image_bytes = response.content
         
         # Save image
         gen_id = str(uuid.uuid4())
