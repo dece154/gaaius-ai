@@ -205,42 +205,46 @@ const ProModal = ({ open, onClose }) => {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="glass border-white/10 max-w-md">
+      <DialogContent className="glass border-white/10 max-w-sm p-5">
         <DialogHeader>
-          <DialogTitle className="font-secondary flex items-center gap-2">
+          <DialogTitle className="font-secondary flex items-center gap-2 text-base">
             <Crown className="w-5 h-5 text-yellow-400" /> Upgrade to Pro
           </DialogTitle>
-          <DialogDescription>Remove all ads and get unlimited access for just $1/month</DialogDescription>
+          <DialogDescription className="text-xs">Ad-free + unlimited access for just $1/month</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
-          <div className="glass-light rounded-xl p-4">
-            <h3 className="font-semibold mb-2">Pro Benefits:</h3>
-            <ul className="text-sm text-muted-foreground space-y-1">
+        <div className="space-y-3">
+          <div className="glass-light rounded-xl p-3">
+            <ul className="text-xs text-muted-foreground space-y-1">
               <li>✓ No ads - ever!</li>
-              <li>✓ Priority generation</li>
+              <li>✓ Priority generation & HD exports</li>
               <li>✓ Longer videos (up to 60s)</li>
-              <li>✓ HD image exports</li>
               <li>✓ Early access to new features</li>
             </ul>
           </div>
           
           {paypalClientId && (
-            <PayPalScriptProvider options={{ clientId: paypalClientId, currency: "USD" }}>
-              <PayPalButtons
-                style={{ layout: "vertical", color: "gold", shape: "pill" }}
-                createOrder={(data, actions) => actions.order.create({
-                  purchase_units: [{ amount: { value: "1.00" }, description: "GAAIUS AI Pro - 1 Month" }]
-                })}
-                onApprove={handlePayPalApprove}
-                onError={() => toast.error("PayPal error")}
-              />
-            </PayPalScriptProvider>
+            <div className="max-h-[120px] overflow-hidden">
+              <PayPalScriptProvider options={{ clientId: paypalClientId, currency: "USD" }}>
+                <PayPalButtons
+                  style={{ layout: "horizontal", color: "gold", shape: "pill", height: 40 }}
+                  createOrder={(data, actions) => actions.order.create({
+                    purchase_units: [{ amount: { value: "1.00" }, description: "GAAIUS AI Pro - 1 Month" }]
+                  })}
+                  onApprove={handlePayPalApprove}
+                  onError={() => toast.error("PayPal error")}
+                />
+              </PayPalScriptProvider>
+            </div>
           )}
           
-          <div className="text-center text-muted-foreground text-sm">or</div>
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-xs text-muted-foreground">or</span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
           
-          <Button onClick={handlePayFast} variant="outline" className="w-full border-green-500/30 text-green-400 hover:bg-green-500/10">
-            <CreditCard className="w-4 h-4 mr-2" /> Pay with PayFast (South Africa)
+          <Button onClick={handlePayFast} variant="outline" className="w-full h-9 border-green-500/30 text-green-400 hover:bg-green-500/10 text-xs" data-testid="payfast-btn">
+            <CreditCard className="w-3.5 h-3.5 mr-2" /> Pay with PayFast (R18 ZAR)
           </Button>
         </div>
       </DialogContent>
