@@ -1350,6 +1350,9 @@ const Sidebar = ({ mode, setMode, sessions, currentSession, setCurrentSession, s
           <button onClick={() => navigate("/build")} className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 text-left">
             <Hammer className="w-4 h-4 text-muted-foreground" /><span className="text-sm">Build</span>
           </button>
+          <button onClick={() => navigate("/documents")} className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 text-left">
+            <FileCode className="w-4 h-4 text-cyan-400" /><span className="text-sm">AI Document Studio</span>
+          </button>
         </div>
       </div>
 
