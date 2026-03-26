@@ -18,6 +18,7 @@ import hashlib
 import jwt
 import requests
 import json
+import time
 
 # Load environment variables
 ROOT_DIR = Path(__file__).parent
@@ -1441,6 +1442,172 @@ IMPORTANT:
         
     except Exception as e:
         logger.error(f"Build generate-full error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============== STREAM - Netflix-style Video Hub ==============
+
+STREAM_CATEGORIES = [
+    {"id": "featured", "name": "Trending Now", "query": "mediatype:movies AND NOT mediatype:collection AND year:[1920 TO 2025] AND downloads:[500 TO 999999999]", "sort": "downloads desc"},
+    {"id": "documentaries", "name": "Documentaries", "query": "subject:documentary AND mediatype:movies AND NOT mediatype:collection", "sort": "downloads desc"},
+    {"id": "comedy", "name": "Comedy", "query": "subject:comedy AND mediatype:movies AND NOT mediatype:collection", "sort": "downloads desc"},
+    {"id": "horror", "name": "Horror & Thriller", "query": "subject:horror AND mediatype:movies AND NOT mediatype:collection", "sort": "downloads desc"},
+    {"id": "scifi", "name": "Sci-Fi & Fantasy", "query": "subject:(science fiction) AND mediatype:movies AND NOT mediatype:collection", "sort": "downloads desc"},
+    {"id": "animation", "name": "Animation & Cartoons", "query": "subject:animation AND mediatype:movies AND NOT mediatype:collection", "sort": "downloads desc"},
+    {"id": "noir", "name": "Film Noir & Classic", "query": "subject:(film noir) AND mediatype:movies AND NOT mediatype:collection", "sort": "downloads desc"},
+    {"id": "shorts", "name": "Short Films", "query": "subject:(short film) AND mediatype:movies AND NOT mediatype:collection", "sort": "downloads desc"},
+    {"id": "drama", "name": "Drama", "query": "subject:drama AND mediatype:movies AND NOT mediatype:collection", "sort": "downloads desc"},
+    {"id": "action", "name": "Action & Adventure", "query": "subject:action AND mediatype:movies AND NOT mediatype:collection", "sort": "downloads desc"},
+    {"id": "nature", "name": "Nature & Wildlife", "query": "subject:nature AND mediatype:movies AND NOT mediatype:collection", "sort": "downloads desc"},
+    {"id": "education", "name": "Educational", "query": "subject:educational AND mediatype:movies AND NOT mediatype:collection", "sort": "downloads desc"},
+    {"id": "music", "name": "Music & Concerts", "query": "subject:music AND mediatype:movies AND NOT mediatype:collection", "sort": "downloads desc"},
+    {"id": "western", "name": "Westerns", "query": "subject:western AND mediatype:movies AND NOT mediatype:collection", "sort": "downloads desc"},
+    {"id": "romance", "name": "Romance", "query": "subject:romance AND mediatype:movies AND NOT mediatype:collection", "sort": "downloads desc"},
+    {"id": "war", "name": "War Films", "query": "subject:war AND mediatype:movies AND NOT mediatype:collection", "sort": "downloads desc"},
+    {"id": "mystery", "name": "Mystery", "query": "subject:mystery AND mediatype:movies AND NOT mediatype:collection", "sort": "downloads desc"},
+    {"id": "silent", "name": "Silent Films", "query": "subject:(silent film) AND mediatype:movies AND NOT mediatype:collection", "sort": "downloads desc"},
+]
+
+# In-memory cache for stream data
+stream_cache = {}
+stream_cache_ttl = 1800  # 30 minutes
+
+def _parse_video_doc(doc):
+    """Parse Internet Archive doc into video dict, returns None for invalid items"""
+    vid_id = doc.get("identifier", "")
+    title = doc.get("title", "")
+    if not vid_id or len(title) < 3:
+        return None
+    lower_title = title.lower()
+    if any(skip in lower_title for skip in ["test file", "sample 1", "test_", "sample_"]):
+        return None
+    creator = doc.get("creator", "Unknown")
+    if isinstance(creator, list):
+        creator = creator[0] if creator else "Unknown"
+    desc = doc.get("description", "") or ""
+    if isinstance(desc, list):
+        desc = desc[0] if desc else ""
+    return {
+        "id": vid_id,
+        "title": title,
+        "creator": creator,
+        "year": str(doc.get("date", ""))[:4] if doc.get("date") else "",
+        "description": desc[:300],
+        "thumbnail": f"https://archive.org/services/img/{vid_id}",
+        "embed_url": f"https://archive.org/embed/{vid_id}",
+        "watch_url": f"https://archive.org/details/{vid_id}",
+        "downloads": doc.get("downloads", 0)
+    }
+
+@api_router.get("/stream/categories")
+async def get_stream_categories():
+    return [{"id": c["id"], "name": c["name"]} for c in STREAM_CATEGORIES]
+
+@api_router.get("/stream/browse")
+async def stream_browse(rows: int = 6):
+    """Get multiple category rows for the Netflix-style home page"""
+    results = []
+    categories_to_fetch = STREAM_CATEGORIES[:rows]
+    
+    for cat in categories_to_fetch:
+        cache_key = f"stream_{cat['id']}"
+        cached = stream_cache.get(cache_key)
+        if cached and time.time() - cached["time"] < stream_cache_ttl:
+            results.append({"id": cat["id"], "name": cat["name"], "videos": cached["data"]})
+            continue
+        
+        try:
+            url = f"https://archive.org/advancedsearch.php"
+            params = {
+                "q": cat["query"],
+                "fl[]": "identifier,title,creator,date,description,downloads",
+                "sort[]": cat["sort"],
+                "rows": 25,
+                "page": 1,
+                "output": "json"
+            }
+            resp = requests.get(url, params=params, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                docs = data.get("response", {}).get("docs", [])
+                videos = []
+                for doc in docs:
+                    v = _parse_video_doc(doc)
+                    if v:
+                        videos.append(v)
+                stream_cache[cache_key] = {"data": videos, "time": time.time()}
+                results.append({"id": cat["id"], "name": cat["name"], "videos": videos})
+        except Exception as e:
+            logger.warning(f"Stream fetch error for {cat['id']}: {e}")
+            results.append({"id": cat["id"], "name": cat["name"], "videos": []})
+    
+    return results
+
+@api_router.get("/stream/category/{category_id}")
+async def stream_category(category_id: str, page: int = 1, per_page: int = 50):
+    """Get videos for a specific category with pagination"""
+    cat = next((c for c in STREAM_CATEGORIES if c["id"] == category_id), None)
+    if not cat:
+        raise HTTPException(status_code=404, detail="Category not found")
+    
+    cache_key = f"stream_{category_id}_p{page}"
+    cached = stream_cache.get(cache_key)
+    if cached and time.time() - cached["time"] < stream_cache_ttl:
+        return {"category": cat["name"], "videos": cached["data"], "page": page}
+    
+    try:
+        url = f"https://archive.org/advancedsearch.php"
+        params = {
+            "q": cat["query"],
+            "fl[]": "identifier,title,creator,date,description,downloads",
+            "sort[]": cat["sort"],
+            "rows": per_page,
+            "page": page,
+            "output": "json"
+        }
+        resp = requests.get(url, params=params, timeout=15)
+        data = resp.json()
+        docs = data.get("response", {}).get("docs", [])
+        total = data.get("response", {}).get("numFound", 0)
+        
+        videos = []
+        for doc in docs:
+            v = _parse_video_doc(doc)
+            if v:
+                videos.append(v)
+        
+        stream_cache[cache_key] = {"data": videos, "time": time.time()}
+        return {"category": cat["name"], "videos": videos, "page": page, "total": total}
+    except Exception as e:
+        logger.error(f"Stream category error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/stream/search")
+async def stream_search(q: str, page: int = 1, per_page: int = 30):
+    """Search videos across Internet Archive"""
+    try:
+        url = f"https://archive.org/advancedsearch.php"
+        params = {
+            "q": f"{q} AND mediatype:movies",
+            "fl[]": "identifier,title,creator,date,description,downloads",
+            "sort[]": "downloads desc",
+            "rows": per_page,
+            "page": page,
+            "output": "json"
+        }
+        resp = requests.get(url, params=params, timeout=15)
+        data = resp.json()
+        docs = data.get("response", {}).get("docs", [])
+        total = data.get("response", {}).get("numFound", 0)
+        
+        videos = []
+        for doc in docs:
+            v = _parse_video_doc(doc)
+            if v:
+                videos.append(v)
+        
+        return {"videos": videos, "total": total, "page": page, "query": q}
+    except Exception as e:
+        logger.error(f"Stream search error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============== STATIC FILES ==============

@@ -15,7 +15,8 @@ import {
   MessageSquare, Image, Video, Mic, MicOff, Send, Plus, Trash2, Volume2,
   Loader2, Sparkles, Zap, Menu, X, Download, User, LogOut, Crown, Music,
   FileCode, FolderOpen, Hammer, Eye, Code, Settings, CreditCard, Edit, Save,
-  PanelLeftClose, PanelLeftOpen, Clock, Globe, AudioLines
+  PanelLeftClose, PanelLeftOpen, Clock, Globe, AudioLines, Play, Search,
+  ChevronLeft, ChevronRight, Film, Star, TvMinimalPlay
 } from "lucide-react";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -1030,25 +1031,63 @@ const DocumentStudio = ({ onBack }) => {
           
           <ScrollArea className="flex-1 p-4">
             {chatHistory.length === 0 ? (
-              <div className="text-center py-8">
-                <FileCode className="w-12 h-12 text-cyan-400/50 mx-auto mb-4" />
+              <div className="text-center py-6">
+                {(() => { const ag = agents.find(a => a.id === selectedAgent); const AgIcon = ag?.icon || Sparkles; return <AgIcon className={`w-10 h-10 mx-auto mb-3 ${ag?.color || "text-primary"} opacity-50`} />; })()}
                 <p className="text-sm text-muted-foreground mb-4">What document would you like to create?</p>
-                <div className="space-y-2 text-xs text-left">
-                  <p className="text-primary/70 cursor-pointer hover:text-primary p-2 rounded hover:bg-white/5" onClick={() => setPrompt("Create a professional invoice for web development services, $5000, due in 30 days")}>
-                    💡 "Create a professional invoice for $5000"
-                  </p>
-                  <p className="text-primary/70 cursor-pointer hover:text-primary p-2 rounded hover:bg-white/5" onClick={() => setPrompt("Write a business proposal for a mobile app development project")}>
-                    💡 "Write a business proposal for an app"
-                  </p>
-                  <p className="text-primary/70 cursor-pointer hover:text-primary p-2 rounded hover:bg-white/5" onClick={() => setPrompt("Create a service agreement contract for software consulting")}>
-                    💡 "Create a service agreement contract"
-                  </p>
-                  <p className="text-primary/70 cursor-pointer hover:text-primary p-2 rounded hover:bg-white/5" onClick={() => setPrompt("Generate an Excel budget spreadsheet for a startup")}>
-                    💡 "Generate a budget spreadsheet"
-                  </p>
-                  <p className="text-primary/70 cursor-pointer hover:text-primary p-2 rounded hover:bg-white/5" onClick={() => setPrompt("Create a modern CV/resume for a software developer")}>
-                    💡 "Create a CV/resume"
-                  </p>
+                <div className="space-y-1.5 text-xs text-left">
+                  {/* Agent-specific templates */}
+                  {selectedAgent === "general" && [
+                    "Create a professional invoice for web development services, $5000, due in 30 days",
+                    "Write a business proposal for a mobile app development project",
+                    "Create a service agreement contract for software consulting",
+                    "Generate an Excel budget spreadsheet for a startup",
+                    "Create a modern CV/resume for a software developer"
+                  ].map(t => <p key={t} className="text-primary/70 cursor-pointer hover:text-primary p-2 rounded hover:bg-white/5" onClick={() => setPrompt(t)}>{t}</p>)}
+                  {selectedAgent === "lawyer" && [
+                    "Draft a Non-Disclosure Agreement (NDA) between two companies",
+                    "Create a Freelance Service Contract with payment milestones",
+                    "Write Terms of Service for a SaaS platform",
+                    "Draft an Employment Agreement with non-compete clause",
+                    "Create a Privacy Policy compliant with GDPR",
+                    "Write a Lease Agreement for commercial office space",
+                    "Draft a Partnership Agreement for a joint venture"
+                  ].map(t => <p key={t} className="text-amber-400/70 cursor-pointer hover:text-amber-400 p-2 rounded hover:bg-white/5" onClick={() => setPrompt(t)}>{t}</p>)}
+                  {selectedAgent === "accountant" && [
+                    "Create a detailed invoice for consulting services - 40 hours at $150/hr",
+                    "Generate a monthly P&L (Profit & Loss) statement template",
+                    "Create an annual budget spreadsheet for a small business",
+                    "Draft a financial report for Q4 with revenue analysis",
+                    "Create an expense tracking template with categories",
+                    "Generate a tax preparation checklist for freelancers",
+                    "Create a cash flow projection for the next 12 months"
+                  ].map(t => <p key={t} className="text-green-400/70 cursor-pointer hover:text-green-400 p-2 rounded hover:bg-white/5" onClick={() => setPrompt(t)}>{t}</p>)}
+                  {selectedAgent === "hr" && [
+                    "Write a job description for a Senior Software Engineer position",
+                    "Create an Employee Onboarding Checklist",
+                    "Draft an offer letter for a Marketing Manager role - $85K salary",
+                    "Write a Performance Review template with goals section",
+                    "Create a Company Leave Policy document",
+                    "Draft a Remote Work Policy for a tech company",
+                    "Create an Employee Handbook outline with all essential sections"
+                  ].map(t => <p key={t} className="text-blue-400/70 cursor-pointer hover:text-blue-400 p-2 rounded hover:bg-white/5" onClick={() => setPrompt(t)}>{t}</p>)}
+                  {selectedAgent === "marketing" && [
+                    "Write a product launch press release for an AI productivity tool",
+                    "Create a marketing campaign plan for Q1 with channels and budget",
+                    "Draft a sales proposal for enterprise software licensing",
+                    "Write a case study about increasing conversion rates by 300%",
+                    "Create brand guidelines document with voice and tone",
+                    "Draft a social media content calendar for 30 days",
+                    "Write a competitive analysis report for the AI SaaS market"
+                  ].map(t => <p key={t} className="text-pink-400/70 cursor-pointer hover:text-pink-400 p-2 rounded hover:bg-white/5" onClick={() => setPrompt(t)}>{t}</p>)}
+                  {selectedAgent === "academic" && [
+                    "Write a research paper abstract on machine learning in healthcare",
+                    "Create a thesis outline for 'Impact of AI on Modern Education'",
+                    "Draft a literature review on renewable energy technologies",
+                    "Write a grant proposal for studying climate change effects",
+                    "Create an annotated bibliography template with 10 entries",
+                    "Draft a lab report template for chemistry experiments",
+                    "Write an academic conference paper proposal on NLP advances"
+                  ].map(t => <p key={t} className="text-cyan-400/70 cursor-pointer hover:text-cyan-400 p-2 rounded hover:bg-white/5" onClick={() => setPrompt(t)}>{t}</p>)}
                 </div>
               </div>
             ) : (
@@ -1114,6 +1153,257 @@ const DocumentStudio = ({ onBack }) => {
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+// ============== STREAM PAGE - Netflix-style Video Hub ==============
+const StreamPage = ({ onBack }) => {
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedVideo, setSelectedVideo] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [expandedCategory, setExpandedCategory] = useState(null);
+  const [categoryVideos, setCategoryVideos] = useState([]);
+  const [categoryLoading, setCategoryLoading] = useState(false);
+  const rowRefs = useRef({});
+
+  useEffect(() => {
+    const fetchBrowse = async () => {
+      try {
+        const res = await api.get("/stream/browse?rows=10");
+        setCategories(res.data);
+      } catch (e) {
+        toast.error("Failed to load stream content");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchBrowse();
+  }, []);
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) { setSearchResults(null); return; }
+    setSearchLoading(true);
+    try {
+      const res = await api.get(`/stream/search?q=${encodeURIComponent(searchQuery)}&per_page=50`);
+      setSearchResults(res.data);
+    } catch (e) {
+      toast.error("Search failed");
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const loadCategory = async (catId) => {
+    if (expandedCategory === catId) { setExpandedCategory(null); return; }
+    setExpandedCategory(catId);
+    setCategoryLoading(true);
+    try {
+      const res = await api.get(`/stream/category/${catId}?per_page=50`);
+      setCategoryVideos(res.data.videos || []);
+    } catch (e) {
+      toast.error("Failed to load category");
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
+  const scrollRow = (catId, dir) => {
+    const el = rowRefs.current[catId];
+    if (el) el.scrollBy({ left: dir * 800, behavior: "smooth" });
+  };
+
+  // Hero - use first video from first category
+  const heroVideo = categories[0]?.videos?.[0];
+
+  return (
+    <div className="h-full flex flex-col bg-[#0a0a0a] overflow-hidden" data-testid="stream-page">
+      {/* Player Modal */}
+      {selectedVideo && (
+        <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center" data-testid="video-player-modal">
+          <div className="w-full max-w-5xl mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-white">{selectedVideo.title}</h2>
+                <p className="text-sm text-gray-400">{selectedVideo.creator} {selectedVideo.year && `(${selectedVideo.year})`}</p>
+              </div>
+              <button onClick={() => setSelectedVideo(null)} className="p-2 hover:bg-white/10 rounded-full transition" data-testid="close-player">
+                <X className="w-6 h-6 text-white" />
+              </button>
+            </div>
+            <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black shadow-2xl shadow-purple-500/10">
+              <iframe
+                src={selectedVideo.embed_url}
+                className="w-full h-full"
+                allowFullScreen
+                allow="autoplay"
+                title={selectedVideo.title}
+              />
+            </div>
+            <p className="mt-4 text-sm text-gray-400 max-w-3xl">{selectedVideo.description}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="h-14 border-b border-white/10 flex items-center justify-between px-4 bg-[#0d0d0d]/90 backdrop-blur-xl z-20 flex-shrink-0">
+        <div className="flex items-center gap-4">
+          <Button size="sm" variant="ghost" onClick={onBack} className="h-8" data-testid="stream-back-btn">
+            <ChevronLeft className="w-4 h-4 mr-1" /> Back
+          </Button>
+          <div className="h-6 w-px bg-white/20" />
+          <h2 className="font-secondary text-base font-bold flex items-center gap-2">
+            <Film className="w-5 h-5 text-red-500" /> GAAIUS Stream
+          </h2>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              placeholder="Search movies, docs..."
+              className="w-64 h-8 pl-9 bg-white/5 border-white/10 text-sm"
+              data-testid="stream-search-input"
+            />
+          </div>
+          <Button size="sm" onClick={handleSearch} variant="outline" className="h-8 text-xs" data-testid="stream-search-btn">
+            Search
+          </Button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
+        {loading ? (
+          <div className="flex items-center justify-center h-96">
+            <Loader2 className="w-8 h-8 animate-spin text-red-500" />
+          </div>
+        ) : searchResults ? (
+          /* Search Results */
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-bold">Results for "{searchResults.query}" <span className="text-sm text-muted-foreground font-normal">({searchResults.total?.toLocaleString()} found)</span></h2>
+              <Button size="sm" variant="ghost" onClick={() => { setSearchResults(null); setSearchQuery(""); }}>Clear</Button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+              {searchResults.videos?.map(video => (
+                <VideoCard key={video.id} video={video} onClick={() => setSelectedVideo(video)} />
+              ))}
+            </div>
+          </div>
+        ) : expandedCategory ? (
+          /* Expanded Category */
+          <div className="p-6">
+            <div className="flex items-center gap-4 mb-6">
+              <Button size="sm" variant="ghost" onClick={() => setExpandedCategory(null)}>
+                <ChevronLeft className="w-4 h-4 mr-1" /> Back
+              </Button>
+              <h2 className="text-lg font-bold">{categories.find(c => c.id === expandedCategory)?.name}</h2>
+            </div>
+            {categoryLoading ? (
+              <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-red-500" /></div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                {categoryVideos.map(video => (
+                  <VideoCard key={video.id} video={video} onClick={() => setSelectedVideo(video)} />
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Netflix-style Home */
+          <>
+            {/* Hero Banner */}
+            {heroVideo && (
+              <div className="relative h-[400px] w-full overflow-hidden" data-testid="stream-hero">
+                <div className="absolute inset-0">
+                  <img src={heroVideo.thumbnail} alt={heroVideo.title} className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/60 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-transparent to-transparent" />
+                </div>
+                <div className="absolute bottom-12 left-8 right-1/2 z-10">
+                  <h1 className="text-4xl font-bold mb-3 text-white drop-shadow-lg">{heroVideo.title}</h1>
+                  <p className="text-sm text-gray-300 mb-1">{heroVideo.creator} {heroVideo.year && `(${heroVideo.year})`}</p>
+                  <p className="text-sm text-gray-400 mb-5 line-clamp-2">{heroVideo.description}</p>
+                  <div className="flex gap-3">
+                    <Button onClick={() => setSelectedVideo(heroVideo)} className="bg-white text-black hover:bg-gray-200 font-semibold px-6" data-testid="hero-play-btn">
+                      <Play className="w-5 h-5 mr-2 fill-black" /> Play
+                    </Button>
+                    <Button variant="outline" className="border-white/30 hover:bg-white/10" onClick={() => setSelectedVideo(heroVideo)}>
+                      More Info
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Category Rows */}
+            <div className="px-6 pb-12 space-y-8 -mt-8 relative z-10">
+              {categories.map(cat => (
+                <div key={cat.id} data-testid={`stream-row-${cat.id}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <button onClick={() => loadCategory(cat.id)} className="text-base font-semibold hover:text-red-400 transition flex items-center gap-2 group">
+                      {cat.name}
+                      <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-red-400 transition" />
+                    </button>
+                    <div className="flex gap-1">
+                      <button onClick={() => scrollRow(cat.id, -1)} className="p-1.5 rounded-full bg-white/5 hover:bg-white/10 transition">
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => scrollRow(cat.id, 1)} className="p-1.5 rounded-full bg-white/5 hover:bg-white/10 transition">
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div ref={el => rowRefs.current[cat.id] = el} className="flex gap-3 overflow-x-auto scrollbar-hide scroll-smooth pb-2" style={{ scrollbarWidth: "none" }}>
+                    {cat.videos?.length > 0 ? cat.videos.map(video => (
+                      <VideoCard key={video.id} video={video} onClick={() => setSelectedVideo(video)} />
+                    )) : (
+                      <div className="flex items-center justify-center w-48 h-28 bg-white/5 rounded-lg text-xs text-muted-foreground">No content</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Video Thumbnail Card
+const VideoCard = ({ video, onClick }) => {
+  return (
+    <div 
+      onClick={onClick}
+      className="flex-shrink-0 w-[220px] group cursor-pointer transition-transform duration-200 hover:scale-105 hover:z-10"
+      data-testid={`video-card-${video.id}`}
+    >
+      <div className="relative aspect-video rounded-lg overflow-hidden bg-white/5 mb-2">
+        <img 
+          src={video.thumbnail} 
+          alt={video.title} 
+          className="w-full h-full object-cover transition-opacity group-hover:opacity-80"
+          loading="lazy"
+          onError={(e) => { e.target.src = ''; e.target.className = 'w-full h-full bg-gradient-to-br from-gray-800 to-gray-900'; }}
+        />
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
+          <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+            <Play className="w-5 h-5 text-black fill-black ml-0.5" />
+          </div>
+        </div>
+        {video.year && (
+          <div className="absolute top-2 right-2 bg-black/70 px-1.5 py-0.5 rounded text-[10px] text-white font-mono">{video.year}</div>
+        )}
+      </div>
+      <h3 className="text-sm font-medium truncate group-hover:text-red-400 transition">{video.title}</h3>
+      <p className="text-xs text-muted-foreground truncate">{video.creator}</p>
     </div>
   );
 };
@@ -1291,6 +1581,19 @@ const MainApp = () => {
         <div className="h-screen bg-[#050505]">
           <Toaster position="top-center" theme="dark" />
           <DocumentStudio onBack={() => navigate("/")} />
+        </div>
+      </>
+    );
+  }
+
+  if (location.pathname === "/stream") {
+    return (
+      <>
+        <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
+        <ProfileModal open={showProfile} onClose={() => setShowProfile(false)} />
+        <div className="h-screen bg-[#050505]">
+          <Toaster position="top-center" theme="dark" />
+          <StreamPage onBack={() => navigate("/")} />
         </div>
       </>
     );
@@ -1718,6 +2021,9 @@ const Sidebar = ({ mode, setMode, sessions, currentSession, setCurrentSession, s
           </button>
           <button onClick={() => navigate("/documents")} className={`w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 text-left ${collapsed ? "justify-center" : ""}`} title="AI Document Studio">
             <FileCode className="w-4 h-4 text-cyan-400 flex-shrink-0" />{!collapsed && <span className="text-sm">AI Document Studio</span>}
+          </button>
+          <button onClick={() => navigate("/stream")} className={`w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 text-left ${collapsed ? "justify-center" : ""}`} title="Stream">
+            <Film className="w-4 h-4 text-red-400 flex-shrink-0" />{!collapsed && <span className="text-sm">Stream</span>}
           </button>
         </div>
       </div>
