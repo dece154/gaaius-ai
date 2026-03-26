@@ -995,14 +995,43 @@ async def generate_file(request: FileGenerationRequest, user = Depends(get_curre
 
 @api_router.post("/document/generate")
 async def generate_document(data: dict, user = Depends(get_current_user)):
-    """GAAIUS AI Document Studio - Generate professional documents"""
+    """GAAIUS AI Document Studio - Generate professional documents with AI Agents"""
     try:
         prompt = data.get("prompt", "")
         doc_type = data.get("document_type", "pdf")
         current_content = data.get("current_content", "")
         doc_name = data.get("document_name", "document")
+        agent = data.get("agent", "general")
         
-        # Document type specific prompts
+        # AI Agent personas with domain expertise
+        agent_prompts = {
+            "general": "You are GAAIUS AI, a professional document writer. Create well-structured, clear, and professional documents.",
+            "lawyer": """You are GAAIUS AI Legal Counsel, an expert legal document writer. 
+You specialize in contracts, agreements, NDAs, terms of service, privacy policies, and legal correspondence.
+Always use precise legal language, include standard legal clauses (force majeure, indemnification, severability, governing law).
+Add signature blocks and witness sections where appropriate. Include effective dates and term durations.
+Note: This is for informational purposes. Recommend professional legal review for binding documents.""",
+            "accountant": """You are GAAIUS AI Financial Expert, a certified accounting and finance professional.
+You specialize in invoices, financial reports, budgets, tax documents, profit/loss statements, and balance sheets.
+Always include proper calculations, tax breakdowns, payment terms, and currency formatting.
+Use standard accounting formats (GAAP/IFRS style). Include totals, subtotals, and clear line items.""",
+            "hr": """You are GAAIUS AI HR Manager, an expert in human resources documentation.
+You specialize in job descriptions, employee handbooks, offer letters, performance reviews, termination letters, and company policies.
+Use inclusive language, clear expectations, and standard HR formatting.
+Include relevant sections for benefits, compensation, reporting structure, and compliance requirements.""",
+            "marketing": """You are GAAIUS AI Marketing Director, an expert copywriter and strategist.
+You specialize in business proposals, marketing plans, sales decks, press releases, case studies, and brand guidelines.
+Write with persuasive, engaging language. Use data-driven arguments, clear value propositions, and compelling CTAs.
+Include executive summaries, market analysis, and ROI projections where relevant.""",
+            "academic": """You are GAAIUS AI Academic Writer, an expert in scholarly and research documentation.
+You specialize in research papers, thesis outlines, literature reviews, grant proposals, and academic reports.
+Use proper academic formatting (APA/MLA style), citations, abstract, methodology sections.
+Include references section and maintain formal, objective academic tone throughout."""
+        }
+        
+        agent_system = agent_prompts.get(agent, agent_prompts["general"])
+        
+        # Document type specific instructions
         doc_prompts = {
             "invoice": """You are a professional invoice generator. Create a detailed, professional invoice with:
 - Company/Sender information (placeholder for user to fill)
@@ -1080,7 +1109,7 @@ Use appropriate formal tone.""",
 - Proper formatting"""
         }
         
-        system_prompt = doc_prompts.get(doc_type, doc_prompts["default"])
+        system_prompt = f"{agent_system}\n\n{doc_prompts.get(doc_type, doc_prompts['default'])}"
         
         # If editing existing content
         user_prompt = prompt

@@ -449,13 +449,14 @@ const GenerationResult = ({ data, type }) => {
 // Build Page Component - GAAIUS AI Builder (Simplified: AI Chat + Live Preview)
 const BuildPage = ({ showSidebar = false, navigate, user, showAuth, showPro, showProfile, logout }) => {
   const [prompt, setPrompt] = useState("");
-  const [htmlContent, setHtmlContent] = useState(`<!DOCTYPE html>
+  const [files, setFiles] = useState({
+    "index.html": `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My App</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com"><\/script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     * { font-family: 'Inter', sans-serif; }
@@ -476,16 +477,21 @@ const BuildPage = ({ showSidebar = false, navigate, user, showAuth, showPro, sho
     <div class="max-w-4xl mx-auto text-center py-20">
       <h2 class="text-5xl font-bold mb-6 bg-gradient-to-r from-white via-purple-200 to-pink-200 bg-clip-text text-transparent">Build Something Amazing</h2>
       <p class="text-xl text-gray-400 mb-8">Tell GAAIUS AI what you want to build and watch it come to life instantly.</p>
-      <button class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 px-8 py-4 rounded-xl font-semibold text-lg transition transform hover:scale-105">Start Building →</button>
+      <button class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 px-8 py-4 rounded-xl font-semibold text-lg transition transform hover:scale-105">Start Building</button>
     </div>
   </main>
 </body>
-</html>`);
+</html>`
+  });
+  const [activeFile, setActiveFile] = useState("index.html");
+  const [viewMode, setViewMode] = useState("preview"); // preview, code, split
   const [loading, setLoading] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
   const nav = useNavigate();
+
+  const htmlContent = files["index.html"] || "";
 
   const handleGenerate = async () => {
     if (!prompt.trim() || loading) return;
@@ -495,7 +501,7 @@ const BuildPage = ({ showSidebar = false, navigate, user, showAuth, showPro, sho
     try {
       const res = await api.post("/build/generate", { prompt, current_code: htmlContent });
       if (res.data.code) {
-        setHtmlContent(res.data.code);
+        setFiles(prev => ({ ...prev, "index.html": res.data.code }));
         setChatHistory(prev => [...prev, { role: "assistant", content: "Done! I've updated your website. Check the preview!" }]);
         toast.success("Website updated!");
       }
@@ -508,11 +514,17 @@ const BuildPage = ({ showSidebar = false, navigate, user, showAuth, showPro, sho
     }
   };
 
+  const addFile = (name) => {
+    if (!name || files[name]) return;
+    setFiles(prev => ({ ...prev, [name]: "" }));
+    setActiveFile(name);
+  };
+
   const handleSaveToProject = async () => {
     if (!projectName.trim()) return;
     try {
       const res = await api.post("/projects", { name: projectName, description: "Created from Build", type: "web" });
-      await api.put(`/projects/${res.data.id}/files`, { "index.html": htmlContent });
+      await api.put(`/projects/${res.data.id}/files`, files);
       toast.success("Saved to project!");
       setShowSaveDialog(false);
       (navigate || nav)("/projects");
@@ -554,6 +566,18 @@ const BuildPage = ({ showSidebar = false, navigate, user, showAuth, showPro, sho
           </h2>
         </div>
         <div className="flex items-center gap-2">
+          {/* View mode toggle */}
+          <div className="flex items-center bg-white/5 rounded-lg p-0.5">
+            <button onClick={() => setViewMode("preview")} className={`px-2.5 py-1 rounded text-xs transition ${viewMode === "preview" ? "bg-primary text-white" : "text-muted-foreground hover:text-white"}`} data-testid="view-preview">
+              <Eye className="w-3 h-3 inline mr-1" />Preview
+            </button>
+            <button onClick={() => setViewMode("code")} className={`px-2.5 py-1 rounded text-xs transition ${viewMode === "code" ? "bg-primary text-white" : "text-muted-foreground hover:text-white"}`} data-testid="view-code">
+              <Code className="w-3 h-3 inline mr-1" />Code
+            </button>
+            <button onClick={() => setViewMode("split")} className={`px-2.5 py-1 rounded text-xs transition ${viewMode === "split" ? "bg-primary text-white" : "text-muted-foreground hover:text-white"}`} data-testid="view-split">
+              Split
+            </button>
+          </div>
           <Button size="sm" onClick={downloadProject} variant="outline" className="h-7 text-xs">
             <Download className="w-3 h-3 mr-1" /> Download
           </Button>
@@ -565,37 +589,37 @@ const BuildPage = ({ showSidebar = false, navigate, user, showAuth, showPro, sho
       
       <div className="flex-1 flex overflow-hidden">
         {/* Left: AI Chat */}
-        <div className="w-96 border-r border-white/10 flex flex-col bg-[#0d0d0d]">
-          <div className="p-4 border-b border-white/10">
+        <div className="w-80 border-r border-white/10 flex flex-col bg-[#0d0d0d]">
+          <div className="p-3 border-b border-white/10">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-primary" />
-              <span className="font-semibold">AI Assistant</span>
+              <Sparkles className="w-4 h-4 text-primary" />
+              <span className="font-semibold text-sm">AI Assistant</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Tell me what website you want to build</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Describe what to build or modify</p>
           </div>
           
-          <ScrollArea className="flex-1 p-4">
+          <ScrollArea className="flex-1 p-3">
             {chatHistory.length === 0 ? (
-              <div className="text-center py-8">
-                <Hammer className="w-12 h-12 text-primary/50 mx-auto mb-4" />
-                <p className="text-sm text-muted-foreground mb-4">What would you like to build?</p>
-                <div className="space-y-2 text-xs">
-                  <p className="text-primary/70 cursor-pointer hover:text-primary" onClick={() => setPrompt("Build a modern SaaS landing page")}>💡 "Build a modern SaaS landing page"</p>
-                  <p className="text-primary/70 cursor-pointer hover:text-primary" onClick={() => setPrompt("Create an e-commerce product page")}>💡 "Create an e-commerce product page"</p>
-                  <p className="text-primary/70 cursor-pointer hover:text-primary" onClick={() => setPrompt("Make a portfolio website for a designer")}>💡 "Make a portfolio website"</p>
-                  <p className="text-primary/70 cursor-pointer hover:text-primary" onClick={() => setPrompt("Build a dashboard with charts and stats")}>💡 "Build a dashboard with charts"</p>
+              <div className="text-center py-6">
+                <Hammer className="w-10 h-10 text-primary/50 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground mb-3">What would you like to build?</p>
+                <div className="space-y-1.5 text-xs text-left">
+                  {["Build a modern SaaS landing page", "Create an e-commerce product page", "Make a portfolio website for a designer", "Build a dashboard with charts and stats"].map(s => (
+                    <p key={s} className="text-primary/70 cursor-pointer hover:text-primary p-2 rounded hover:bg-white/5" onClick={() => setPrompt(s)}>
+                      {s}
+                    </p>
+                  ))}
                 </div>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {chatHistory.map((msg, i) => (
-                  <div key={i} className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === "user" ? "bg-blue-600" : "bg-gradient-to-br from-primary to-purple-600"}`}>
-                      {msg.role === "user" ? <User className="w-4 h-4 text-white" /> : <Sparkles className="w-4 h-4 text-white" />}
+                  <div key={i} className={`flex gap-2 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === "user" ? "bg-blue-600" : "bg-gradient-to-br from-primary to-purple-600"}`}>
+                      {msg.role === "user" ? <User className="w-3 h-3 text-white" /> : <Sparkles className="w-3 h-3 text-white" />}
                     </div>
                     <div className={`flex-1 ${msg.role === "user" ? "text-right" : ""}`}>
-                      <p className="text-xs text-muted-foreground mb-1">{msg.role === "user" ? "You" : "GAAIUS AI"}</p>
-                      <div className={`inline-block p-3 rounded-2xl text-sm leading-relaxed ${msg.role === "user" ? "bg-blue-600 text-white rounded-br-md" : "bg-[#1e1e1e] border border-white/10 rounded-bl-md"}`}>
+                      <div className={`inline-block p-2.5 rounded-xl text-xs leading-relaxed ${msg.role === "user" ? "bg-blue-600 text-white rounded-br-sm" : "bg-[#1e1e1e] border border-white/10 rounded-bl-sm"}`}>
                         {msg.content}
                       </div>
                     </div>
@@ -605,42 +629,80 @@ const BuildPage = ({ showSidebar = false, navigate, user, showAuth, showPro, sho
             )}
           </ScrollArea>
           
-          <div className="p-4 border-t border-white/10">
+          <div className="p-3 border-t border-white/10">
             <div className="flex gap-2">
               <Input
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Describe what to build..."
-                className="flex-1 bg-white/5 border-white/10"
+                className="flex-1 bg-white/5 border-white/10 h-9 text-sm"
                 onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
               />
-              <Button onClick={handleGenerate} disabled={loading} className="bg-primary">
+              <Button onClick={handleGenerate} disabled={loading} className="bg-primary h-9 w-9 p-0">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               </Button>
             </div>
           </div>
         </div>
         
-        {/* Right: Live Preview */}
+        {/* Right: Code Editor + Preview */}
         <div className="flex-1 flex flex-col">
-          <div className="h-10 border-b border-white/10 flex items-center justify-between px-4 bg-[#111]">
-            <div className="flex items-center gap-2">
-              <Eye className="w-4 h-4 text-cyan-400" />
-              <span className="text-sm font-mono">Live Preview</span>
-            </div>
-            <div className="flex gap-1">
-              <div className="w-3 h-3 rounded-full bg-red-500" />
-              <div className="w-3 h-3 rounded-full bg-yellow-500" />
-              <div className="w-3 h-3 rounded-full bg-green-500" />
-            </div>
+          {/* File tabs */}
+          <div className="h-9 border-b border-white/10 flex items-center px-2 bg-[#111] gap-1">
+            {Object.keys(files).map(fname => (
+              <button key={fname} onClick={() => setActiveFile(fname)}
+                className={`px-3 py-1 rounded-t text-xs font-mono transition ${activeFile === fname ? "bg-[#1e1e1e] text-white border-t border-x border-white/10" : "text-muted-foreground hover:text-white"}`}
+                data-testid={`file-tab-${fname}`}
+              >
+                {fname}
+              </button>
+            ))}
+            <button onClick={() => { const name = window.prompt("File name (e.g., styles.css):"); if (name) addFile(name); }}
+              className="px-2 py-1 text-xs text-muted-foreground hover:text-white transition"
+              data-testid="add-file-btn"
+            >
+              <Plus className="w-3 h-3" />
+            </button>
           </div>
-          <div className="flex-1 bg-white">
-            <iframe
-              srcDoc={htmlContent}
-              className="w-full h-full border-0"
-              title="Preview"
-              sandbox="allow-scripts allow-same-origin"
-            />
+          
+          {/* Content area */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Code editor */}
+            {(viewMode === "code" || viewMode === "split") && (
+              <div className={`${viewMode === "split" ? "w-1/2" : "flex-1"} flex flex-col bg-[#1e1e1e] border-r border-white/10`}>
+                <div className="h-8 border-b border-white/10 flex items-center px-3">
+                  <Code className="w-3 h-3 text-muted-foreground mr-2" />
+                  <span className="text-xs font-mono text-muted-foreground">{activeFile}</span>
+                </div>
+                <textarea
+                  value={files[activeFile] || ""}
+                  onChange={(e) => setFiles(prev => ({ ...prev, [activeFile]: e.target.value }))}
+                  className="flex-1 bg-transparent text-green-300 font-mono text-xs p-4 resize-none focus:outline-none leading-relaxed"
+                  spellCheck={false}
+                  data-testid="code-editor"
+                />
+              </div>
+            )}
+            
+            {/* Preview */}
+            {(viewMode === "preview" || viewMode === "split") && (
+              <div className={`${viewMode === "split" ? "w-1/2" : "flex-1"} flex flex-col`}>
+                <div className="h-8 border-b border-white/10 flex items-center justify-between px-3 bg-[#111]">
+                  <div className="flex items-center gap-2">
+                    <Eye className="w-3 h-3 text-cyan-400" />
+                    <span className="text-xs font-mono text-muted-foreground">Preview</span>
+                  </div>
+                  <div className="flex gap-1">
+                    <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                  </div>
+                </div>
+                <div className="flex-1 bg-white">
+                  <iframe srcDoc={htmlContent} className="w-full h-full border-0" title="Preview" sandbox="allow-scripts allow-same-origin" />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -763,21 +825,31 @@ const DocumentStudio = ({ onBack }) => {
   const [documentName, setDocumentName] = useState("Untitled Document");
   const [loading, setLoading] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
-  const [activeTab, setActiveTab] = useState("create");
+  const [activeTab, setActiveTab] = useState("agents");
   const [generatedFiles, setGeneratedFiles] = useState([]);
+  const [selectedAgent, setSelectedAgent] = useState("general");
   const { user } = useAuthStore();
 
+  const agents = [
+    { id: "general", label: "General AI", desc: "All-purpose document writer", icon: Sparkles, color: "text-purple-400", bg: "bg-purple-500/10", border: "border-purple-500/30" },
+    { id: "lawyer", label: "AI Lawyer", desc: "Contracts, NDAs, legal docs", icon: FileCode, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30" },
+    { id: "accountant", label: "AI Accountant", desc: "Invoices, budgets, reports", icon: CreditCard, color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/30" },
+    { id: "hr", label: "AI HR Manager", desc: "Job posts, policies, letters", icon: User, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/30" },
+    { id: "marketing", label: "AI Marketing", desc: "Proposals, copy, campaigns", icon: Zap, color: "text-pink-400", bg: "bg-pink-500/10", border: "border-pink-500/30" },
+    { id: "academic", label: "AI Academic", desc: "Papers, thesis, research", icon: Edit, color: "text-cyan-400", bg: "bg-cyan-500/10", border: "border-cyan-500/30" }
+  ];
+
   const documentTypes = [
-    { id: "pdf", label: "PDF Document", icon: "📄" },
-    { id: "docx", label: "Word Document", icon: "📝" },
-    { id: "xlsx", label: "Excel Spreadsheet", icon: "📊" },
-    { id: "invoice", label: "Invoice", icon: "🧾" },
-    { id: "contract", label: "Contract/Agreement", icon: "⚖️" },
-    { id: "proposal", label: "Business Proposal", icon: "💼" },
-    { id: "resume", label: "CV/Resume", icon: "👤" },
-    { id: "letter", label: "Letter", icon: "✉️" },
-    { id: "report", label: "Report", icon: "📋" },
-    { id: "presentation", label: "Presentation", icon: "📽️" }
+    { id: "pdf", label: "PDF Document" },
+    { id: "docx", label: "Word Document" },
+    { id: "xlsx", label: "Excel Spreadsheet" },
+    { id: "invoice", label: "Invoice" },
+    { id: "contract", label: "Contract/Agreement" },
+    { id: "proposal", label: "Business Proposal" },
+    { id: "resume", label: "CV/Resume" },
+    { id: "letter", label: "Letter" },
+    { id: "report", label: "Report" },
+    { id: "presentation", label: "Presentation" }
   ];
 
   const handleGenerate = async () => {
@@ -791,7 +863,8 @@ const DocumentStudio = ({ onBack }) => {
         prompt, 
         document_type: documentType,
         current_content: documentContent,
-        document_name: documentName
+        document_name: documentName,
+        agent: selectedAgent
       });
       
       if (res.data.content) {
@@ -879,13 +952,37 @@ const DocumentStudio = ({ onBack }) => {
       </div>
       
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar - Document Types & History */}
+        {/* Left Sidebar - AI Agents & Document Types */}
         <div className="w-64 border-r border-white/10 flex flex-col bg-[#0d0d0d]">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-            <TabsList className="w-full grid grid-cols-2 m-2 bg-white/5">
-              <TabsTrigger value="create" className="text-xs">Create</TabsTrigger>
+            <TabsList className="w-full grid grid-cols-3 m-2 bg-white/5">
+              <TabsTrigger value="agents" className="text-xs">Agents</TabsTrigger>
+              <TabsTrigger value="create" className="text-xs">Type</TabsTrigger>
               <TabsTrigger value="history" className="text-xs">Files</TabsTrigger>
             </TabsList>
+            
+            <TabsContent value="agents" className="flex-1 p-3 space-y-2 overflow-auto">
+              <p className="text-xs text-muted-foreground uppercase font-mono mb-2">AI Agents</p>
+              {agents.map(ag => {
+                const AgIcon = ag.icon;
+                return (
+                  <button
+                    key={ag.id}
+                    onClick={() => setSelectedAgent(ag.id)}
+                    className={`w-full flex items-center gap-3 p-2.5 rounded-lg text-left transition ${selectedAgent === ag.id ? `${ag.bg} ${ag.border} border` : "hover:bg-white/5 border border-transparent"}`}
+                    data-testid={`agent-${ag.id}`}
+                  >
+                    <div className={`w-8 h-8 rounded-lg ${ag.bg} flex items-center justify-center flex-shrink-0`}>
+                      <AgIcon className={`w-4 h-4 ${ag.color}`} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className={`text-sm font-medium ${selectedAgent === ag.id ? ag.color : ""}`}>{ag.label}</p>
+                      <p className="text-xs text-muted-foreground truncate">{ag.desc}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </TabsContent>
             
             <TabsContent value="create" className="flex-1 p-3 space-y-2 overflow-auto">
               <p className="text-xs text-muted-foreground uppercase font-mono mb-2">Document Type</p>
@@ -895,7 +992,6 @@ const DocumentStudio = ({ onBack }) => {
                   onClick={() => setDocumentType(dt.id)}
                   className={`w-full flex items-center gap-2 p-2 rounded-lg text-sm transition ${documentType === dt.id ? "bg-primary/20 border border-primary/40" : "hover:bg-white/5"}`}
                 >
-                  <span>{dt.icon}</span>
                   <span>{dt.label}</span>
                 </button>
               ))}
@@ -926,10 +1022,10 @@ const DocumentStudio = ({ onBack }) => {
         <div className="w-96 border-r border-white/10 flex flex-col bg-[#0a0a0a]">
           <div className="p-4 border-b border-white/10">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-primary" />
-              <span className="font-semibold">AI Document Assistant</span>
+              {(() => { const ag = agents.find(a => a.id === selectedAgent); const AgIcon = ag?.icon || Sparkles; return <AgIcon className={`w-5 h-5 ${ag?.color || "text-primary"}`} />; })()}
+              <span className="font-semibold text-sm">{agents.find(a => a.id === selectedAgent)?.label || "AI Assistant"}</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Tell me what document to create or edit</p>
+            <p className="text-xs text-muted-foreground mt-1">{agents.find(a => a.id === selectedAgent)?.desc}</p>
           </div>
           
           <ScrollArea className="flex-1 p-4">
